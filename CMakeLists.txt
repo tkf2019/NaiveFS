@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.23.0)
+cmake_minimum_required(VERSION 3.11.0)
 project(NaiveFS VERSION 0.0.1 LANGUAGES CXX)
 
 # compiler
@@ -25,3 +25,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC ${NAIVEFS_INCLUDE_DIR})
 target_include_directories(${PROJECT_NAME} PUBLIC ${FUSE_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME} INTERFACE pthread)
 target_link_libraries(${PROJECT_NAME} PUBLIC ${FUSE_LIBRARIES})
+
+# set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake;${CMAKE_MODULE_PATH}")
+# include(spdlog)
+# target_link_libraries(${PROJECT_NAME} PRIVATE spdlog)

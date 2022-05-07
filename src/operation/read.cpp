@@ -6,6 +6,7 @@ namespace naivefs {
 
 int read(const char *path, char *buf, size_t size, off_t offset,
          struct fuse_file_info *fi) {
+  WARNING("READ!");
   size_t len;
   (void)fi;
   if (strcmp(path + 1, "hello") != 0) return -ENOENT;

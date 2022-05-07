@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "inode.h"
+#include "logging.h"
 #include "option.h"
 
 namespace naivefs {

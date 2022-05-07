@@ -22,6 +22,7 @@ static void show_help(const char *progname) {
 naivefs::options global_options = {.show_help = 0};
 
 int main(int argc, char *argv[]) {
+  logging_open("test.log");
   int ret;
   fuse_args args = FUSE_ARGS_INIT(argc, argv);
   if (fuse_opt_parse(&args, &global_options, option_spec, NULL) == -1) return 1;
