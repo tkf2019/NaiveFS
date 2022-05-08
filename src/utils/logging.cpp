@@ -7,7 +7,7 @@
  * more details.
  */
 
-#include "logging.h"
+#include "utils/logging.h"
 
 #include <pthread.h>
 #include <stdarg.h>

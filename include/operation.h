@@ -11,8 +11,8 @@
 #include <string.h>
 
 #include "inode.h"
-#include "logging.h"
-#include "option.h"
+#include "utils/logging.h"
+#include "utils/option.h"
 
 namespace naivefs {
 int getattr(const char* path, struct stat* stbuf, struct fuse_file_info* fi);
