@@ -2,7 +2,7 @@
 
 namespace naivefs {
 
-int getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi) {
+int fuse_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi) {
   (void)fi;
   int res = 0;
 

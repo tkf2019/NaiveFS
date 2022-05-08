@@ -15,21 +15,21 @@
 #include "utils/option.h"
 
 namespace naivefs {
-int getattr(const char* path, struct stat* stbuf, struct fuse_file_info* fi);
+int fuse_getattr(const char* path, struct stat* stbuf, struct fuse_file_info* fi);
 
-int readlink(const char* path, char* buf, size_t size);
+int fuse_readlink(const char* path, char* buf, size_t size);
 
-int mkdir(const char* path, mode_t mode);
+int fuse_mkdir(const char* path, mode_t mode);
 
-int readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offset,
+int fuse_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offset,
             struct fuse_file_info* fi, enum fuse_readdir_flags flags);
 
-void* init(fuse_conn_info* info, fuse_config* config);
+void* fuse_init(fuse_conn_info* info, fuse_config* config);
 
-int read(const char* path, char* buf, size_t size, off_t offset,
+int fuse_read(const char* path, char* buf, size_t size, off_t offset,
          fuse_file_info* fi);
 
-int open(const char* path, fuse_file_info* fi);
+int fuse_open(const char* path, fuse_file_info* fi);
 
 }  // namespace naivefs
 

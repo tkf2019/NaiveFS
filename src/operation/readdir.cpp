@@ -3,7 +3,7 @@
 namespace naivefs {
 // options global_options;
 
-int readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset,
+int fuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset,
             struct fuse_file_info *fi, enum fuse_readdir_flags flags) {
   (void)offset;
   (void)fi;

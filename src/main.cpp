@@ -1,6 +1,7 @@
 #include <iostream>
 
 #include "cache.h"
+#include "disk.h"
 #include "operation.h"
 #include "utils/option.h"
 
@@ -34,20 +35,31 @@ int main(int argc, char *argv[]) {
   // lru_cache.insert("d", "abc");
   // std::cout << lru_cache.get("b") << std::endl;
 
-  int ret;
-  fuse_args args = FUSE_ARGS_INIT(argc, argv);
-  if (fuse_opt_parse(&args, &global_options, option_spec, NULL) == -1) return 1;
-  if (global_options.show_help) {
-    show_help(argv[0]);
-    assert(fuse_opt_add_arg(&args, "--help") == 0);
-    args.argv[0][0] = '\0';
-  }
-  ops.init = naivefs::init;
-  ops.getattr = naivefs::getattr;
-  ops.readdir = naivefs::readdir;
-  ops.open = naivefs::open;
-  ops.read = naivefs::read;
-  ret = fuse_main(args.argc, args.argv, &ops, NULL);
-  fuse_opt_free_args(&args);
+  uint8_t *buf = (uint8_t *)naivefs::alloc_aligned(4096);
+  memcpy(buf + 2048, "Hello World!", 13);
+  naivefs::disk_open();
+  int ret = naivefs::disk_write(0, 2048, buf + 2048);
+  char *str = (char *)malloc(13);
+  ret = naivefs::disk_read(0, 2048, buf);
+  memcpy(str, buf, 13);
+  std::cout << str << std::endl;
+  naivefs::disk_close();
+  free(buf);
+  free(str);
+  // int ret;
+  // fuse_args args = FUSE_ARGS_INIT(argc, argv);
+  // if (fuse_opt_parse(&args, &global_options, option_spec, NULL) == -1) return
+  // 1; if (global_options.show_help) {
+  //   show_help(argv[0]);
+  //   assert(fuse_opt_add_arg(&args, "--help") == 0);
+  //   args.argv[0][0] = '\0';
+  // }
+  // ops.init = naivefs::init;
+  // ops.getattr = naivefs::getattr;
+  // ops.readdir = naivefs::readdir;
+  // ops.open = naivefs::open;
+  // ops.read = naivefs::read;
+  // ret = fuse_main(args.argc, args.argv, &ops, NULL);
+  // fuse_opt_free_args(&args);
   return ret;
 }
