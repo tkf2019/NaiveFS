@@ -4,13 +4,19 @@
 #include <stdint.h>
 
 namespace naivefs {
-
-constexpr static const int N_BLOCKS = 15;
-constexpr static const int MAX_NAME_LEN = 255;
-
 // disk
-constexpr static const int DISK_ALIGN = 512;
+#define DISK_ALIGN 512
 #define DISK_NAME "/tmp/disk"
+
+#define ALIGN_TO(__n, __align)                        \
+  ({                                                  \
+    typeof(__n) __ret;                                \
+    if ((__n) % (__align)) {                          \
+      __ret = ((__n) & (~((__align)-1))) + (__align); \
+    } else                                            \
+      __ret = (__n);                                  \
+    __ret;                                            \
+  })
 
 }  // namespace naivefs
 

@@ -1,27 +1,18 @@
 #include "utils/bitmap.h"
 
-namespace naivefs::bitmap {
+namespace naivefs {
 
-uint32_t* create(void* buf) { return (uint32_t*)buf; }
+void Bitmap::set(int i) { data_[i >> BIT_SHIFT] |= BIT_GET(i); }
 
-void set(uint32_t* bitmap, int i) {
-  DEBUG("SET %d", i);
-  bitmap[i >> BIT_SHIFT] |= BIT_GET(i);
-}
+int Bitmap::test(int i) { return data_[i >> BIT_SHIFT] & BIT_GET(i); }
 
-int test(uint32_t* bitmap, int i) {
-  return bitmap[i >> BIT_SHIFT] & BIT_GET(i);
-}
+int Bitmap::clear(int i) { return data_[i >> BIT_SHIFT] & ~BIT_GET(i); }
 
-int clear(uint32_t* bitmap, int i) {
-  return bitmap[i >> BIT_SHIFT] & ~BIT_GET(i);
-}
-
-int find(uint32_t* bitmap, int size) {
+int64_t Bitmap::find(int size) {
   int max_index = (size >> BIT_SHIFT) + ((size & BIT_MASK) != 0);
   for (int i = 0; i < max_index; ++i) {
-    if (bitmap[i] != BIT_MAX) {
-      int cur_bits = bitmap[i];
+    if (data_[i] != BIT_MAX) {
+      int cur_bits = data_[i];
       int k = 0;
       while (cur_bits & 1) {
         cur_bits >>= 1;
@@ -34,4 +25,4 @@ int find(uint32_t* bitmap, int size) {
   return -1;
 }
 
-}  // namespace naivefs::bitmap
+}  // namespace naivefs

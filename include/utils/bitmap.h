@@ -6,29 +6,35 @@
 #include "common.h"
 #include "logging.h"
 
-namespace naivefs::bitmap {
+namespace naivefs {
 
 #define BIT_SHIFT 5
 #define BIT_MASK 0x1f
 #define BIT_MAX ((1UL << 32) - 1)
 #define BIT_GET(__i) (1 << (__i & BIT_MASK))
 
-uint32_t* create(void* buf);
+class Bitmap {
+ public:
+  Bitmap(void* buf) : data_((uint32_t*)buf) {}
 
-void set(uint32_t* bitmap, int i);
+  void set(int i);
 
-int test(uint32_t* bitmap, int i);
+  int test(int i);
 
-int clear(uint32_t* bitmap, int i);
+  int clear(int i);
 
-/**
- * @brief find the first unset bit in the bitmap
- *
- * @param size find the bit in range [0, size)
- * @return int -1 if out of range or no unset bit
- */
-int find(uint32_t* bitmap, int size);
+  /**
+   * @brief find the first unset bit in the bitmap
+   *
+   * @param size find the bit in range [0, size)
+   * @return int -1 if out of range or no unset bit
+   */
+  int64_t find(int size);
 
-}  // namespace naivefs::bitmap
+ private:
+  uint32_t* data_;
+};
+
+}  // namespace naivefs
 
 #endif

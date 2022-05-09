@@ -22,7 +22,8 @@ class LRUCache {
   LRUCache(int size)
       : entries_(new Node<K, V>[size]),
         head_(new Node<K, V>),
-        tail_(new Node<K, V>) {
+        tail_(new Node<K, V>),
+        max_size_(size) {
     for (int i = 0; i < size; ++i) {
       free_entries_.push_back(entries_ + i);
     }
@@ -32,7 +33,7 @@ class LRUCache {
     tail_->next = nullptr;
   }
 
-  void insert(const K& key, const V& value) {
+  V insert(const K& key, const V& value) {
     Node<K, V>* node = map_[key];
     if (node == nullptr) {
       if (free_entries_.empty()) {
@@ -68,6 +69,8 @@ class LRUCache {
     }
   }
 
+  size_t size() { return max_size_ * sizeof(struct Node<K, V>); }
+
   ~LRUCache() {
     delete head_;
     delete tail_;
@@ -79,6 +82,7 @@ class LRUCache {
   std::vector<Node<K, V>*> free_entries_;
   Node<K, V>* entries_;
   Node<K, V>*head_, *tail_;
+  size_t max_size_;
 
   // TODO: multi-thread
   // Maybe one lock for one node

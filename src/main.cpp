@@ -47,18 +47,20 @@ void test_disk() {
   naivefs::disk_close();
   free(buf);
   free(str);
+  std::cout << ret << std::endl;
 }
 
 void test_bitmap() {
-  uint32_t *bitmap = naivefs::bitmap::create(malloc(4096 * sizeof(int)));
-  memset(bitmap, 0, sizeof(int) * 4096);
+  void *buf = malloc(4096 * sizeof(int));
+  memset(buf, 0, 4096 * sizeof(int));
+  auto bitmap = naivefs::Bitmap(buf);
   for (int i = 0; i < 31; ++i) {
-    naivefs::bitmap::set(bitmap, i);
+    bitmap.set(i);
   }
-  naivefs::bitmap::set(bitmap, 32);
-  naivefs::bitmap::set(bitmap, 34);
-  std::cout << naivefs::bitmap::find(bitmap, 100) << std::endl;
-  free(bitmap);
+  bitmap.set(32);
+  bitmap.set(34);
+  std::cout << bitmap.find(100) << std::endl;
+  free(buf);
 }
 
 int main(int argc, char *argv[]) {
