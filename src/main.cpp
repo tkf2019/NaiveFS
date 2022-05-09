@@ -1,8 +1,9 @@
 #include <iostream>
 
 #include "cache.h"
-#include "disk.h"
 #include "operation.h"
+#include "utils/bitmap.h"
+#include "utils/disk.h"
 #include "utils/option.h"
 
 #define OPTION(t, p) \
@@ -23,18 +24,18 @@ static void show_help(const char *progname) {
 
 naivefs::options global_options = {.show_help = 0};
 
-int main(int argc, char *argv[]) {
-  logging_open("test.log");
-
+void test_cache() {
   // Test LRUCache
-  // naivefs::LRUCache<std::string, std::string> lru_cache(3);
-  // lru_cache.insert("a", "abc");
-  // lru_cache.insert("b", "abc");
-  // lru_cache.insert("c", "abc");
-  // std::cout << lru_cache.get("a") << std::endl;
-  // lru_cache.insert("d", "abc");
-  // std::cout << lru_cache.get("b") << std::endl;
+  naivefs::LRUCache<std::string, std::string> lru_cache(3);
+  lru_cache.insert("a", "abc");
+  lru_cache.insert("b", "abc");
+  lru_cache.insert("c", "abc");
+  std::cout << lru_cache.get("a") << std::endl;
+  lru_cache.insert("d", "abc");
+  std::cout << lru_cache.get("b") << std::endl;
+}
 
+void test_disk() {
   uint8_t *buf = (uint8_t *)naivefs::alloc_aligned(4096);
   memcpy(buf + 2048, "Hello World!", 13);
   naivefs::disk_open();
@@ -46,10 +47,27 @@ int main(int argc, char *argv[]) {
   naivefs::disk_close();
   free(buf);
   free(str);
+}
+
+void test_bitmap() {
+  uint32_t *bitmap = naivefs::bitmap::create(malloc(4096 * sizeof(int)));
+  memset(bitmap, 0, sizeof(int) * 4096);
+  for (int i = 0; i < 31; ++i) {
+    naivefs::bitmap::set(bitmap, i);
+  }
+  naivefs::bitmap::set(bitmap, 32);
+  naivefs::bitmap::set(bitmap, 34);
+  std::cout << naivefs::bitmap::find(bitmap, 100) << std::endl;
+  free(bitmap);
+}
+
+int main(int argc, char *argv[]) {
+  logging_open("test.log");
+  test_bitmap();
   // int ret;
   // fuse_args args = FUSE_ARGS_INIT(argc, argv);
-  // if (fuse_opt_parse(&args, &global_options, option_spec, NULL) == -1) return
-  // 1; if (global_options.show_help) {
+  // if (fuse_opt_parse(&args, &global_options, option_spec, NULL) == -1)
+  // return 1; if (global_options.show_help) {
   //   show_help(argv[0]);
   //   assert(fuse_opt_add_arg(&args, "--help") == 0);
   //   args.argv[0][0] = '\0';
@@ -61,5 +79,5 @@ int main(int argc, char *argv[]) {
   // ops.read = naivefs::read;
   // ret = fuse_main(args.argc, args.argv, &ops, NULL);
   // fuse_opt_free_args(&args);
-  return ret;
+  return 0;
 }
