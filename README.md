@@ -35,33 +35,33 @@ Naive file system based on fuse.
     - FSYNC:
     - [ ] `FLUSH`: generated every time an opened file is closed.
     - [ ] `ACCESS`: generated when the kernel evaluates if a user process has premission to access a file. (default_premissions option will delegate permission checks back to kernel, thus no ACCESS request will be generated)
-  - Data:
+  - Data: (yfzcsc)
     - READ:
     - WRITE:
-  - Attributes:
+  - Attributes: (yfzcsc)
     - GETATTR:
     - SETATTR:
-  - Extended Attributes:
+  - Extended Attributes: (yfzcsc)
     - SETXATTR:
     - GETXATTR:
     - LISTXATTR:
     - REMOVEXATTR:
-  - Symlinks:
+  - Symlinks: (yfzcsc)
     - SYMLINK:
     - READLINK:
-  - Directory:
+  - Directory: (yfzcsc)
     - MKDIR:
     - RMDIR:
-    - [ ] `OPENDIR`: the daemon assigns a 64-bit file handle to the opened directory.
-    - [ ] `RELEASEDIR`: no more references to a previously opened directory.
-    - READDIR:
+    - [ ] `OPENDIR`: the daemon assigns a 64-bit file handle to the opened directory. 
+    - [ ] `RELEASEDIR`: no more references to a previously opened directory. 
+    - READDIR: 
     - [ ] `READDIRPLUS`: returns one or more directory entries like READDIR, but including metadata information for each entry, which allows the kernel to pre-fill its inode cache.
     - FSYNCDIR:
   - Locking:
     - GETLK:
     - SETLK:
     - SETLKW:
-  - Misc:
+  - Misc: (yfzcsc)
     - BMAP:
     - FALLOCATE:
     - MKNOD:
