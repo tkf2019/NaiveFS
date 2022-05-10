@@ -33,7 +33,7 @@ class LRUCache {
     tail_->next = nullptr;
   }
 
-  V insert(const K& key, const V& value) {
+  void insert(const K& key, const V& value) {
     Node<K, V>* node = map_[key];
     if (node == nullptr) {
       if (free_entries_.empty()) {

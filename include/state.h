@@ -5,8 +5,8 @@ namespace naivefs {
 
 // File system state (super_block.s_state)
 enum FSState {
-  UNINIT = 0x0
-
+  UNINIT = 0x0,
+  NORMAL = 0x1
 };
 
 }  // namespace naivefs

@@ -9,15 +9,13 @@
 #include "ext2/dentry.h"
 #include "ext2/inode.h"
 #include "ext2/super.h"
+#include "state.h"
 #include "utils/bitmap.h"
 #include "utils/disk.h"
 #include "utils/logging.h"
 
 namespace naivefs {
 
-#define BLOCK_SIZE 4096  // 4KB block
-#define INODE_PER_BLOCK BLOCK_SIZE / sizeof(ext2_inode)
-#define NUM_INODE_BLOCKS BLOCK_SIZE * 8 / INODE_PER_BLOCK
 #define GROUP_DESC_MIN_SIZE 0x20
 
 #define BLOCKS2BYTES(__blks) (((uint64_t)(__blks)) * BLOCK_SIZE)
@@ -32,12 +30,15 @@ class Block {
   Block() : offset_(0), data_(nullptr) {}
 
   Block(off_t offset) : offset_(offset) {
-    data_ = (uint8_t*)malloc(BLOCK_SIZE);
+    data_ = (uint8_t*)alloc_aligned(BLOCK_SIZE);
     int ret = disk_read(offset_, BLOCK_SIZE, data_);
     ASSERT(ret == 0);
   }
 
-  ~Block() { delete[] data_; }
+  ~Block() {
+    flush();
+    free(data_);
+  }
 
   int flush() { return disk_write(offset_, BLOCK_SIZE, data_); }
 
@@ -53,11 +54,10 @@ class Block {
 class SuperBlock : public Block {
  public:
   SuperBlock() : Block(0), super_((ext2_super_block*)data_) {
-    ext2_group_desc* ptr = (ext2_group_desc*)(data_ + sizeof(ext2_super_block));
-    for (uint32_t i = 0; i < num_block_groups(); ++i) {
-      desc_table_.push_back(ptr++);
-    }
+    init_super_block();
   }
+
+  void init_super_block();
 
   inline ext2_super_block* get() { return super_; }
 

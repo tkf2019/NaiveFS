@@ -11,10 +11,13 @@
 #include <string.h>
 
 #include "ext2/inode.h"
+#include "filesystem.h"
 #include "utils/logging.h"
 #include "utils/option.h"
 
 namespace naivefs {
+
+extern FileSystem* fs;
 
 int fuse_getattr(const char* path, struct stat* stbuf,
                  struct fuse_file_info* fi);

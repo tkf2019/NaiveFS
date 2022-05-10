@@ -47,7 +47,6 @@ void test_disk() {
   naivefs::disk_close();
   free(buf);
   free(str);
-  std::cout << ret << std::endl;
 }
 
 void test_bitmap() {
@@ -65,21 +64,22 @@ void test_bitmap() {
 
 int main(int argc, char *argv[]) {
   logging_open("test.log");
-  test_bitmap();
-  // int ret;
-  // fuse_args args = FUSE_ARGS_INIT(argc, argv);
-  // if (fuse_opt_parse(&args, &global_options, option_spec, NULL) == -1)
-  // return 1; if (global_options.show_help) {
-  //   show_help(argv[0]);
-  //   assert(fuse_opt_add_arg(&args, "--help") == 0);
-  //   args.argv[0][0] = '\0';
-  // }
-  // ops.init = naivefs::init;
-  // ops.getattr = naivefs::getattr;
-  // ops.readdir = naivefs::readdir;
-  // ops.open = naivefs::open;
-  // ops.read = naivefs::read;
-  // ret = fuse_main(args.argc, args.argv, &ops, NULL);
-  // fuse_opt_free_args(&args);
-  return 0;
+  // test_bitmap();
+  // test_disk();
+  int ret;
+  fuse_args args = FUSE_ARGS_INIT(argc, argv);
+  if (fuse_opt_parse(&args, &global_options, option_spec, NULL) == -1) return
+  1; if (global_options.show_help) {
+    show_help(argv[0]);
+    assert(fuse_opt_add_arg(&args, "--help") == 0);
+    args.argv[0][0] = '\0';
+  }
+  ops.init = naivefs::fuse_init;
+  ops.getattr = naivefs::fuse_getattr;
+  ops.readdir = naivefs::fuse_readdir;
+  ops.open = naivefs::fuse_open;
+  ops.read = naivefs::fuse_read;
+  ret = fuse_main(args.argc, args.argv, &ops, NULL);
+  fuse_opt_free_args(&args);
+  return ret;
 }
