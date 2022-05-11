@@ -12,7 +12,7 @@ int fuse_read(const char *path, char *buf, size_t size, off_t offset,
   if (strcmp(path + 1, "hello") != 0) return -ENOENT;
 
   len = strlen("Hello World!");
-  if (offset < len) {
+  if ((size_t)offset < len) {
     if (offset + size > len) size = len - offset;
     memcpy(buf, "Hello World!" + offset, size);
   } else
