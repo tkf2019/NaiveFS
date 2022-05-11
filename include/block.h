@@ -59,7 +59,12 @@ class SuperBlock : public Block {
 
   void init_super_block();
 
-  inline ext2_super_block* get() { return super_; }
+  inline ext2_super_block* get_super() { return super_; }
+
+  inline ext2_group_desc* get_group_desc(int index) {
+    if ((size_t)index >= desc_table_.size()) return nullptr;
+    return desc_table_[index];
+  }
 
   inline uint64_t block_group_size() {
     return BLOCKS2BYTES(super_->s_blocks_per_group);
@@ -123,7 +128,7 @@ class BitmapBlock : public Block {
 
   void set(int i) { bitmap_.set(i); }
 
-  int test(int i) { return bitmap_.test(i); }
+  bool test(int i) { return bitmap_.test(i); }
 
   void clear(int i) { bitmap_.clear(i); }
 
@@ -152,9 +157,15 @@ class BlockGroup {
 
   ~BlockGroup();
 
+  void flush();
+
   bool get_inode(uint32_t index, ext2_inode** inode);
 
   bool get_block(uint32_t index, Block** block);
+
+  bool alloc_inode(ext2_inode** inode);
+
+  bool alloc_block(Block** block);
 
  private:
   BitmapBlock* block_bitmap_;

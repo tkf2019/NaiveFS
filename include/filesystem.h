@@ -1,29 +1,34 @@
 #ifndef NAIVEFS_INCLUDE_FILESYSTEM_H_
 #define NAIVEFS_INCLUDE_FILESYSTEM_H_
 
+#include <sys/time.h>
+
 #include <string>
 
 #include "block.h"
 #include "cache.h"
-#include "common.h"
-#include "ext2/dentry.h"
-#include "ext2/inode.h"
-#include "ext2/super.h"
-#include "state.h"
 
 namespace naivefs {
 
 class FileSystem {
  public:
-  FileSystem() : super_block_(new SuperBlock()) {
-    DEBUG("Initialize file system");
+  FileSystem();
+
+  ~FileSystem() {
+    delete root_inode_;
+    delete super_block_;
+    for (auto bg : block_groups_) {
+      delete bg.second;
+    }
   }
 
-  ~FileSystem() { delete super_block_; }
+  inline ext2_super_block* super() { return super_block_->get_super(); }
 
-  inline ext2_super_block* super() { return super_block_->get(); }
+  void init_root_inode();
 
  private:
+  // Timestamp
+  timeval time_;
   // Super block
   SuperBlock* super_block_;
   // Root inode

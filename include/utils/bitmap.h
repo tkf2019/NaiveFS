@@ -19,9 +19,9 @@ class Bitmap {
 
   void set(int i);
 
-  int test(int i);
+  bool test(int i);
 
-  int clear(int i);
+  void clear(int i);
 
   /**
    * @brief find the first unset bit in the bitmap

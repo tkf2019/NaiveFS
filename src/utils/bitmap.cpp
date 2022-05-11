@@ -4,9 +4,9 @@ namespace naivefs {
 
 void Bitmap::set(int i) { data_[i >> BIT_SHIFT] |= BIT_GET(i); }
 
-int Bitmap::test(int i) { return data_[i >> BIT_SHIFT] & BIT_GET(i); }
+bool Bitmap::test(int i) { return data_[i >> BIT_SHIFT] & BIT_GET(i); }
 
-int Bitmap::clear(int i) { return data_[i >> BIT_SHIFT] & ~BIT_GET(i); }
+void Bitmap::clear(int i) { data_[i >> BIT_SHIFT] &= ~BIT_GET(i); }
 
 int64_t Bitmap::find(int size) {
   int max_index = (size >> BIT_SHIFT) + ((size & BIT_MASK) != 0);

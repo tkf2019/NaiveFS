@@ -29,6 +29,8 @@ namespace naivefs {
 #define BLOCKS_PER_GROUP BLOCK_SIZE * 8
 #define INODES_PER_GROUP BLOCK_SIZE * 8
 #define TOTAL_BLOCKS_PER_GROUP BLOCKS_PER_GROUP + NUM_INODE_TABLE_BLOCKS + 2
+
+#define ROOT_INODE 0
 }  // namespace naivefs
 
 #endif

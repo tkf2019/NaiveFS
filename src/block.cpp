@@ -50,13 +50,20 @@ void SuperBlock::init_super_block() {
     }
     default: {
       ERR("Unknown file system state: %i", super_->s_state);
-      break;
+      abort();
     }
   }
 }
 
 BlockGroup::BlockGroup(ext2_group_desc* desc) {
   ASSERT(desc != nullptr);
+
+  INFO("BLOCK BITMAP OFFSET: 0x%x", desc->bg_block_bitmap);
+  INFO("INODE BITMAP OFFSET: 0x%x", desc->bg_inode_bitmap);
+  INFO("INODE TABLE OFFSET: 0x%x", desc->bg_inode_table);
+  INFO("FREE BLOCKS COUNT: %i", desc->bg_free_blocks_count);
+  INFO("FREE INODES COUNT: %i", desc->bg_free_inodes_count);
+
   block_bitmap_ = new BitmapBlock(desc->bg_block_bitmap);
   inode_bitmap_ = new BitmapBlock(desc->bg_inode_bitmap);
 }
@@ -69,10 +76,23 @@ BlockGroup::~BlockGroup() {
   }
 }
 
+void BlockGroup::flush() {
+  ASSERT(block_bitmap_ != nullptr);
+  block_bitmap_->flush();
+  ASSERT(inode_bitmap_ != nullptr);
+  inode_bitmap_->flush();
+  for (auto item : inode_table_) {
+    ASSERT(item.second != nullptr);
+    item.second->flush();
+  }
+}
+
 bool BlockGroup::get_inode(uint32_t index, ext2_inode** inode) {
   // invalid inode
-  if (!inode_bitmap_->test(index)) return false;
-
+  if (!inode_bitmap_->test(index)) {
+    WARNING("Inode has not been allocated in the bitmap!");
+    return false;
+  }
   uint32_t block_index = index / INODE_PER_BLOCK;
   uint32_t block_inner_index = index % INODE_PER_BLOCK;
 
@@ -87,10 +107,25 @@ bool BlockGroup::get_inode(uint32_t index, ext2_inode** inode) {
 
 bool BlockGroup::get_block(uint32_t index, Block** block) {
   // invalid block
-  if (!block_bitmap_->test(index)) return false;
-
+  if (!block_bitmap_->test(index)) {
+    WARNING("Block has not been allocated in the bitmap!");
+    return false;
+  }
   *block = new Block(data_block_offset(index));
   return true;
+}
+
+bool BlockGroup::alloc_inode(ext2_inode** inode) {
+  int ret = inode_bitmap_->alloc_new();
+  if (ret == -1) return false;
+
+  return get_inode(ret, inode);
+}
+
+bool BlockGroup::alloc_block(Block** block) {
+  int ret = block_bitmap_->alloc_new();
+  if (ret == -1) return false;
+  return get_block(ret, block);
 }
 
 off_t BlockGroup::inode_block_offset(uint32_t inode_block_index) {
