@@ -1,7 +1,10 @@
 #ifndef NAIVEFS_INCLUDE_BLOCK_H_
 #define NAIVEFS_INCLUDE_BLOCK_H_
 
+#include <sys/stat.h>
+
 #include <bitset>
+#include <functional>
 #include <map>
 #include <vector>
 
@@ -9,7 +12,6 @@
 #include "ext2/dentry.h"
 #include "ext2/inode.h"
 #include "ext2/super.h"
-#include "state.h"
 #include "utils/bitmap.h"
 #include "utils/disk.h"
 #include "utils/logging.h"
@@ -43,6 +45,8 @@ class Block {
   int flush() { return disk_write(offset_, BLOCK_SIZE, data_); }
 
   off_t offset() { return offset_; }
+
+  uint8_t* get() { return data_; }
 
  protected:
   // index in the block group
@@ -116,21 +120,13 @@ class BitmapBlock : public Block {
  public:
   BitmapBlock(off_t offset) : Block(offset), bitmap_(data_) {}
 
-  int64_t alloc_new() {
-    int64_t i = bitmap_.find(BLOCK_SIZE * sizeof(uint8_t));
-    if (i < 0) {
-      ERR("Failed to alloc new item");
-      return i;
-    }
-    bitmap_.set(i);
-    return i;
-  }
+  int64_t alloc_new();
 
-  void set(int i) { bitmap_.set(i); }
+  inline void set(int i) { bitmap_.set(i); }
 
-  bool test(int i) { return bitmap_.test(i); }
+  inline bool test(int i) { return bitmap_.test(i); }
 
-  void clear(int i) { bitmap_.clear(i); }
+  inline void clear(int i) { bitmap_.clear(i); }
 
  private:
   Bitmap bitmap_;
@@ -149,6 +145,24 @@ class InodeTableBlock : public Block {
 
  private:
   std::vector<ext2_inode*> inodes_;
+};
+
+class DentryBlock : public Block {
+ public:
+  DentryBlock(off_t offset) : Block(offset) {
+    ext2_dir_entry_2* dentry = (ext2_dir_entry_2*)data_;
+    while (true) {
+      if (dentry->rec_len == 0) break;
+      dentries_.push_back(dentry);
+      data_ += dentry->rec_len;
+      dentry = (ext2_dir_entry_2*)data_;
+    }
+  }
+
+  std::vector<ext2_dir_entry_2*>* get() { return &dentries_; }
+
+ private:
+  std::vector<ext2_dir_entry_2*> dentries_;
 };
 
 class BlockGroup {
@@ -177,6 +191,7 @@ class BlockGroup {
   off_t data_block_offset(uint32_t data_block_index);
 };
 
+typedef std::function<bool(Block*)> BlockVisitor;
 }  // namespace naivefs
 
 #endif

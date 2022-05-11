@@ -55,6 +55,16 @@ void SuperBlock::init_super_block() {
   }
 }
 
+int64_t BitmapBlock::alloc_new() {
+  int64_t i = bitmap_.find(BLOCK_SIZE * sizeof(uint8_t));
+  if (i < 0) {
+    ERR("Failed to alloc new item");
+    return i;
+  }
+  bitmap_.set(i);
+  return i;
+}
+
 BlockGroup::BlockGroup(ext2_group_desc* desc) {
   ASSERT(desc != nullptr);
 
