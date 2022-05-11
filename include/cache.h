@@ -4,99 +4,100 @@
 #include <unordered_map>
 #include <vector>
 
+#include "block.h"
 #include "common.h"
 
 namespace naivefs {
 
-template <typename K, typename V>
-struct Node {
-  K key;
-  V value;
-  Node* prev;
-  Node* next;
-};
+class BlockCache {
+  struct Node {
+    bool dirty_;
+    uint32_t index_;
+    Block* block_;
+    Node* prev_;
+    Node* next_;
+  };
 
-template <typename K, typename V>
-class LRUCache {
  public:
-  LRUCache(int size)
-      : entries_(new Node<K, V>[size]),
-        head_(new Node<K, V>),
-        tail_(new Node<K, V>),
-        max_size_(size) {
-    for (int i = 0; i < size; ++i) {
+  BlockCache(size_t size)
+      : entries_(new Node[size]),
+        head_(new Node),
+        tail_(new Node),
+        size_(size) {
+    for (size_t i = 0; i < size; ++i) {
       free_entries_.push_back(entries_ + i);
     }
-    head_->prev = nullptr;
-    head_->next = tail_;
-    tail_->prev = head_;
-    tail_->next = nullptr;
+    head_->prev_ = nullptr;
+    head_->next_ = tail_;
+    tail_->prev_ = head_;
+    tail_->next_ = nullptr;
   }
 
-  void insert(const K& key, const V& value) {
-    Node<K, V>* node = map_[key];
-    if (node == nullptr) {
+  void insert(uint32_t index, Block* block) {
+    Node* node = nullptr;
+    if (map_.find(index) == map_.end()) {
       if (free_entries_.empty()) {
-        // Remove the node not used recently
-        node = tail_->prev;
+        node = tail_->prev_;
         detach(node);
-        map_.erase(node->key);
+        release(node);
+        map_.erase(node->index_);
       } else {
         node = free_entries_.back();
         free_entries_.pop_back();
       }
-      node->key = key;
-      node->value = value;
-      map_[key] = node;
+      node->index_ = index;
+      node->block_ = block;
+      map_[index] = node;
       attach(node);
     } else {
+      node = map_[index];
+      ASSERT(node->block_ == block);
       detach(node);
-      node->value = value;
-      // Insert the node next to the head
       attach(node);
     }
   }
 
-  V get(const K& key) {
-    Node<K, V>* node = map_[key];
-    if (node == nullptr) {
-      return V();
+  Block* get(uint32_t index) {
+    Node* node = nullptr;
+    if (map_.find(index) == map_.end()) {
+      return nullptr;
     } else {
-      // Move the node to the head
+      node = map_[index];
+      ASSERT(node->index_ == index);
       detach(node);
       attach(node);
-      return node->value;
+      return node->block_;
     }
-  }
-
-  size_t size() { return max_size_ * sizeof(struct Node<K, V>); }
-
-  ~LRUCache() {
-    delete head_;
-    delete tail_;
-    delete[] entries_;
   }
 
  private:
-  std::unordered_map<K, Node<K, V>*> map_;
-  std::vector<Node<K, V>*> free_entries_;
-  Node<K, V>* entries_;
-  Node<K, V>*head_, *tail_;
-  size_t max_size_;
-
-  // TODO: multi-thread
-  // Maybe one lock for one node
-  inline void detach(Node<K, V>* node) {
-    node->prev->next = node->next;
-    node->next->prev = node->prev;
+  inline void detach(Node* node) {
+    node->prev_->next_ = node->next_;
+    node->next_->prev_ = node->prev_;
   }
 
-  inline void attach(Node<K, V>* node) {
-    node->prev = head_;
-    node->next = head_->next;
-    head_->next = node;
-    node->next->prev = node;
+  inline void release(Node* node) {
+    if (node->dirty_) {
+      // write back modified block
+      node->block_->flush();
+      // release the memory
+      delete node->block_;
+    }
   }
+
+  inline void attach(Node* node) {
+    node->prev_ = head_;
+    node->next_ = head_->next_;
+    head_->next_ = node;
+    node->next_->prev_ = node;
+  }
+
+ private:
+  std::unordered_map<uint32_t, Node*> map_;
+  std::vector<Node*> free_entries_;
+  Node* entries_;
+  Node *head_, *tail_;
+  size_t size_;
 };
 }  // namespace naivefs
 
