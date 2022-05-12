@@ -1,6 +1,10 @@
 #ifndef NAIVEFS_INCLUDE_CACHE_H_
 #define NAIVEFS_INCLUDE_CACHE_H_
 
+#include <stdint.h>
+#include <string.h>
+
+#include <algorithm>
 #include <unordered_map>
 #include <vector>
 
@@ -19,56 +23,13 @@ class BlockCache {
   };
 
  public:
-  BlockCache(size_t size)
-      : entries_(new Node[size]),
-        head_(new Node),
-        tail_(new Node),
-        size_(size) {
-    for (size_t i = 0; i < size; ++i) {
-      free_entries_.push_back(entries_ + i);
-    }
-    head_->prev_ = nullptr;
-    head_->next_ = tail_;
-    tail_->prev_ = head_;
-    tail_->next_ = nullptr;
-  }
+  BlockCache(size_t size);
 
-  void insert(uint32_t index, Block* block) {
-    Node* node = nullptr;
-    if (map_.find(index) == map_.end()) {
-      if (free_entries_.empty()) {
-        node = tail_->prev_;
-        detach(node);
-        release(node);
-        map_.erase(node->index_);
-      } else {
-        node = free_entries_.back();
-        free_entries_.pop_back();
-      }
-      node->index_ = index;
-      node->block_ = block;
-      map_[index] = node;
-      attach(node);
-    } else {
-      node = map_[index];
-      ASSERT(node->block_ == block);
-      detach(node);
-      attach(node);
-    }
-  }
+  ~BlockCache();
 
-  Block* get(uint32_t index) {
-    Node* node = nullptr;
-    if (map_.find(index) == map_.end()) {
-      return nullptr;
-    } else {
-      node = map_[index];
-      ASSERT(node->index_ == index);
-      detach(node);
-      attach(node);
-      return node->block_;
-    }
-  }
+  void insert(uint32_t index, Block* block);
+
+  Block* get(uint32_t index);
 
  private:
   inline void detach(Node* node) {
@@ -99,6 +60,48 @@ class BlockCache {
   Node *head_, *tail_;
   size_t size_;
 };
+
+class DentryCache {
+ public:
+  struct Node {
+    uint32_t inode_;
+    uint8_t name_len_;
+    Node* childs_;
+    Node* next_;
+    char name_[]; /* File name, up to EXT2_NAME_LEN */
+  };
+
+  DentryCache(size_t size);
+
+  ~DentryCache() ;
+
+  /* Inserts a node as a childs of a given parent.  The parent is updated to
+   * point the newly inserted childs as the first childs.  We return the new
+   * entry so that further entries can be inserted.
+   *
+   *      [0]                  [0]
+   *       /        ==>          \
+   *      /         ==>           \
+   * .->[1]->[2]-.       .->[1]->[3]->[2]-.
+   * `-----------´       `----------------´
+   */
+  Node* insert(Node* parent, const char* name, size_t name_len, uint32_t inode);
+
+  /* Lookup a cache entry for a given file name.  Return value is a struct
+   * pointer that can be used to both obtain the inode number and insert further
+   * child entries. */
+  Node* lookup(Node* parent, const char* name, size_t name_len);
+
+  void release_node(Node* parent);
+
+  void alloc_new_node(Node** node, const char* name, size_t name_len);
+
+ private:
+  Node* root_;
+  size_t size_;
+  size_t max_size_;
+};  // namespace naivefs
+
 }  // namespace naivefs
 
 #endif

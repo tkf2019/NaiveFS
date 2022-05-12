@@ -138,7 +138,7 @@ void FileSystem::visit_inode_blocks(ext2_inode* inode,
             dptr++;
             curr_num++;
           }
-
+          if (curr_num == num_blocks) goto visit_finished;
           ptr++;
         }
         if (curr_num == num_blocks) goto visit_finished;

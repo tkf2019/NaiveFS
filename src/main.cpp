@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include <iostream>
 
 #include "cache.h"
@@ -59,11 +61,26 @@ void test_path() {
   }
 }
 
+void test_dentry_cache() {
+  naivefs::DentryCache *cache = new naivefs::DentryCache(100);
+
+  auto node1 = cache->insert(nullptr, "A", 1, 1);
+  auto node2 = cache->insert(nullptr, "B", 1, 2);
+  cache->lookup(nullptr, "A", 1);
+  auto node3 = cache->insert(node1, "C", 1, 3);
+  auto node4 = cache->insert(node3, "D", 1, 4);
+  auto node5 = cache->insert(node2, "E", 1, 5);
+  cache->lookup(node3, "D", 1);
+  cache->lookup(node3, "E", 1);
+  cache->lookup(node1, "C", 1);
+  delete cache;
+}
+
 int main(int argc, char *argv[]) {
   logging_open("test.log");
-  // test_bitmap();
-  // test_disk();
-  // test_path();
+
+  test_dentry_cache();
+
   int ret;
   fuse_args args = FUSE_ARGS_INIT(argc, argv);
   if (fuse_opt_parse(&args, &global_options, option_spec, NULL) == -1) return 1;
