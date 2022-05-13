@@ -55,6 +55,11 @@ Block* BlockCache::get(uint32_t index) {
   }
 }
 
+void BlockCache::modify(uint32_t index) {
+  if (map_.find(index) == map_.end()) return;
+  map_[index]->dirty_ = true;
+}
+
 DentryCache::DentryCache(size_t size) : size_(1), max_size_(size) {
   alloc_new_node(&root_, "/", 1);
   root_->inode_ = ROOT_INODE;

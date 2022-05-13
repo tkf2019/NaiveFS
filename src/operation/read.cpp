@@ -14,7 +14,19 @@ int fuse_read(const char *path, char *buf, size_t size, off_t offset, struct fus
   if (!fd) return -EINVAL;
   if ((fi->flags & O_ACCMODE) == O_WRONLY) return -EINVAL;
 
-  return fd->copy_to_buf(buf);
+  return fd->copy_to_buf(buf, offset, size);
+}
+
+int fuse_write(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
+  
+  if (fs == nullptr || fi == nullptr) return -EINVAL;
+  auto fd = _fuse_trans_info(fi);
+
+  // File handle is not valid.
+  if (!fd) return -EINVAL;
+  if ((fi->flags & O_ACCMODE) == O_RDONLY) return -EINVAL;
+
+  return fd->write(buf, offset, size);
 }
 
 }  // namespace naivefs

@@ -38,10 +38,6 @@ namespace naivefs {
 // File system state (super_block.s_state)
 enum FSState { UNINIT = 0x0, NORMAL = 0x1 };
 
-constexpr static const uint32_t NUM_INDIRECT_BLOCKS =
-    BLOCK_SIZE / sizeof(uint32_t);
-enum IndirectLevel { SINGLE = 1, DOUBLE = 2, TRIPPLE = 3 };
-
 #define UPDATE_TIME(__val)      \
   ({                            \
     timeval time;               \
@@ -62,6 +58,13 @@ enum IndirectLevel { SINGLE = 1, DOUBLE = 2, TRIPPLE = 3 };
 #define DENTRY_ISDIR(__t) (__t == DENTRY_DIR)
 #define DENTRY_ISREG(__t) (__t == DENTRY_REG)
 
+// direct and indirect blocks
+
+#define NUM_INDIRECT_BLOCKS BLOCK_SIZE / sizeof(uint32_t)
+#define MAX_DIR_BLOCKS EXT2_NDIR_BLOCKS
+#define MAX_IND_BLOCKS NUM_INDIRECT_BLOCKS
+#define MAX_DIND_BLOCKS MAX_IND_BLOCKS* NUM_INDIRECT_BLOCKS
+#define MAX_TIND_BLOCKS MAX_DIND_BLOCKS* NUM_INDIRECT_BLOCKS
 }  // namespace naivefs
 
 #endif

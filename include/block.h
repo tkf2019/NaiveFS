@@ -38,7 +38,8 @@ class Block {
   }
 
   ~Block() {
-    flush();
+    // we need to flush the dirty block manually
+    // flush();
     free(data_);
   }
 
@@ -70,13 +71,22 @@ class SuperBlock : public Block {
     return desc_table_[index];
   }
 
+  inline void put_group_desc(ext2_group_desc* desc) {
+    desc_table_.push_back(desc);
+  }
+
   inline uint64_t block_group_size() {
     return BLOCKS2BYTES(super_->s_blocks_per_group);
   }
 
   inline uint32_t num_block_groups() {
-    uint32_t n = (super_->s_blocks_count + super_->s_blocks_per_group - 1) /
-                 super_->s_blocks_per_group;
+    uint32_t block_n =
+        (super_->s_blocks_count + super_->s_blocks_per_group - 1) /
+        super_->s_blocks_per_group;
+    uint32_t inode_n =
+        (super_->s_inodes_count + super_->s_inodes_per_group - 1) /
+        super_->s_inodes_per_group;
+    uint32_t n = std::max(inode_n, block_n);
     return n ? n : 1;
   }
 
@@ -155,7 +165,7 @@ class DentryBlock {
    * the same position.
    *
    */
-  DentryBlock(Block* block) {
+  DentryBlock(Block* block) : block_(block) {
     uint8_t* data = block->get();
     ext2_dir_entry_2* dentry = (ext2_dir_entry_2*)data;
     while (true) {
@@ -166,14 +176,31 @@ class DentryBlock {
       }
       dentries_.push_back(dentry);
       data += dentry->rec_len;
+      size_ += dentry->rec_len;
       dentry = (ext2_dir_entry_2*)data;
     }
   }
 
   std::vector<ext2_dir_entry_2*>* get() { return &dentries_; }
 
+  ext2_dir_entry_2* alloc_dentry(const char* name, size_t name_len,
+                                 uint32_t inode, bool dir) {
+    ext2_dir_entry_2* dentry = (ext2_dir_entry_2*)(block_->get() + size_);
+    dentry->inode = inode;
+    dentry->name_len = name_len;
+    dentry->rec_len = sizeof(ext2_dir_entry_2) + name_len;
+    dentry->file_type = dir ? DENTRY_DIR : DENTRY_REG;
+    strncpy(dentry->name, name, name_len);
+    dentries_.push_back(dentry);
+    return dentry;
+  }
+
+  size_t size() { return size_; }
+
  private:
+  Block* block_;
   std::vector<ext2_dir_entry_2*> dentries_;
+  size_t size_;
 };
 
 class BlockGroup {
@@ -184,15 +211,18 @@ class BlockGroup {
 
   void flush();
 
+  ext2_group_desc* get_desc() { return desc_; }
+
   bool get_inode(uint32_t index, ext2_inode** inode);
 
   bool get_block(uint32_t index, Block** block);
 
-  bool alloc_inode(ext2_inode** inode);
+  bool alloc_inode(ext2_inode** inode, uint32_t* index, bool dir);
 
-  bool alloc_block(Block** block);
+  bool alloc_block(Block** block, uint32_t* index);
 
  private:
+  ext2_group_desc* desc_;
   BitmapBlock* block_bitmap_;
   BitmapBlock* inode_bitmap_;
   std::map<uint32_t, InodeTableBlock*> inode_table_;
@@ -202,7 +232,7 @@ class BlockGroup {
   off_t data_block_offset(uint32_t data_block_index);
 };
 
-typedef std::function<bool(Block*)> BlockVisitor;
+typedef std::function<bool(uint32_t, Block*)> BlockVisitor;
 }  // namespace naivefs
 
 #endif

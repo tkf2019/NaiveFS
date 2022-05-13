@@ -31,6 +31,8 @@ class BlockCache {
 
   Block* get(uint32_t index);
 
+  void modify(uint32_t index);
+
  private:
   inline void detach(Node* node) {
     node->prev_->next_ = node->next_;
@@ -73,7 +75,7 @@ class DentryCache {
 
   DentryCache(size_t size);
 
-  ~DentryCache() ;
+  ~DentryCache();
 
   /* Inserts a node as a childs of a given parent.  The parent is updated to
    * point the newly inserted childs as the first childs.  We return the new
