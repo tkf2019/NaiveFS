@@ -31,9 +31,11 @@ class Path {
     }
   }
 
-  auto begin() { return name_list_.begin(); }
+  auto begin() const noexcept { return name_list_.begin(); }
 
-  auto end() { return name_list_.end(); }
+  auto end() const noexcept { return name_list_.end(); }
+
+  std::pair<char*, size_t> get(int i) const noexcept { return name_list_[i]; }
 
   inline size_t size() const noexcept { return name_list_.size(); }
 

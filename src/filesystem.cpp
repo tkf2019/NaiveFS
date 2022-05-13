@@ -32,7 +32,7 @@ static void inode_init(ext2_inode* inode) {
 }
 
 /**
- * @brief Display inner data of the inode
+ * Display inner data of the inode
  */
 static void inode_display(ext2_inode* inode) {
   // timeval time;
@@ -57,7 +57,8 @@ static void inode_display(ext2_inode* inode) {
 
 FileSystem::FileSystem()
     : super_block_(new SuperBlock()),
-      block_cache_(new BlockCache(BLOCK_CACHE_SIZE)) {
+      block_cache_(new BlockCache(BLOCK_CACHE_SIZE)),
+      dentry_cache_(new DentryCache(BLOCK_CACHE_SIZE)) {
   DEBUG("Initialize file system");
 
   // init first block group
@@ -78,13 +79,62 @@ FileSystem::FileSystem()
   block_groups_[0]->flush();
 }
 
+FileSystem::~FileSystem() {
+  delete root_inode_;
+  delete super_block_;
+  for (auto bg : block_groups_) {
+    delete bg.second;
+  }
+}
+
 bool FileSystem::inode_lookup(const Path& path, ext2_inode** inode) {
   if (path.empty()) {
     *inode = root_inode_;
     return true;
   }
-  return false;
+  DentryCache::Node* link = nullptr;
+  size_t curr_index = 0;
+  for (auto elem : path) {
+    auto node = dentry_cache_->lookup(link, elem.first, elem.second);
+    if (node == nullptr) {
+      int64_t result = -1;
+      visit_inode_blocks(*inode, [this, elem, &result, &inode](Block* block) {
+        DentryBlock dentry_block(block);
+        for (auto dentry : *dentry_block.get()) {
+          if (dentry->name_len != elem.second) continue;
+          if (memcmp(elem.first, dentry->name, dentry->name_len)) continue;
+          if (!this->get_inode(dentry->inode, inode)) {
+            WARNING("INODE should exist with a valid directory entry!");
+            result = -1;
+            return true;
+          }
+          // find a matched directory entry
+          result = dentry->inode;
+          return true;
+        }
+        return false;
+      });
+      if (result == -1) {
+        *inode = nullptr;
+        return false;
+      }
+      // update dentry cache
+      link = dentry_cache_->insert(link, elem.first, elem.second, result);
+    } else {
+      link = node;
+      if (curr_index == path.size() - 1) {
+        if (!get_inode(link->inode_, inode)) {
+          WARNING("INODE should exist with a valid directory entry!");
+          return false;
+        }
+      }
+    }
+    curr_index++;
+  }
+  return true;
 }
+
+
 
 void FileSystem::visit_inode_blocks(ext2_inode* inode,
                                     const BlockVisitor& visitor) {

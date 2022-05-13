@@ -18,13 +18,7 @@ class FileSystem {
  public:
   FileSystem();
 
-  ~FileSystem() {
-    delete root_inode_;
-    delete super_block_;
-    for (auto bg : block_groups_) {
-      delete bg.second;
-    }
-  }
+  ~FileSystem();
 
   inline ext2_super_block* super() { return super_block_->get_super(); }
 
@@ -90,8 +84,8 @@ class FileSystem {
   // block index mapped to block allocated in memory
   BlockCache* block_cache_;
 
-  // path mapped to directory entry metadata
-  // LRUCache<std::string, ext2_dir_entry_2>* dentry_cache_;
+  // name mapped to directory entry metadata
+  DentryCache* dentry_cache_;
 };
 }  // namespace naivefs
 #endif

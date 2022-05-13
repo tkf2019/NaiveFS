@@ -147,15 +147,26 @@ class InodeTableBlock : public Block {
   std::vector<ext2_inode*> inodes_;
 };
 
-class DentryBlock : public Block {
+class DentryBlock {
  public:
-  DentryBlock(off_t offset) : Block(offset) {
-    ext2_dir_entry_2* dentry = (ext2_dir_entry_2*)data_;
+  /**
+   * Construct a new Dentry Block object. We don't use a derived class
+   * here. It's hard to handle memory space if two different objects refer to
+   * the same position.
+   *
+   */
+  DentryBlock(Block* block) {
+    uint8_t* data = block->get();
+    ext2_dir_entry_2* dentry = (ext2_dir_entry_2*)data;
     while (true) {
-      if (dentry->rec_len == 0) break;
+      if (dentry->rec_len == 0 || !DENTRY_ISDIR(dentry->file_type) ||
+          !DENTRY_ISREG(dentry->file_type)) {
+        // We ensure that directory entries are APPENDED to the data block.
+        break;
+      }
       dentries_.push_back(dentry);
-      data_ += dentry->rec_len;
-      dentry = (ext2_dir_entry_2*)data_;
+      data += dentry->rec_len;
+      dentry = (ext2_dir_entry_2*)data;
     }
   }
 
