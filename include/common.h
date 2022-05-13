@@ -54,6 +54,14 @@ enum IndirectLevel { SINGLE = 1, DOUBLE = 2, TRIPPLE = 3 };
 
 #define BLOCK_CACHE_SIZE 1024  // TODO: maybe larger ?
 
+// dentry types
+
+#define DENTRY_DIR 0x4
+#define DENTRY_REG 0x8
+
+#define DENTRY_ISDIR(__t) (__t == DENTRY_DIR)
+#define DENTRY_ISREG(__t) (__t == DENTRY_REG)
+
 }  // namespace naivefs
 
 #endif
