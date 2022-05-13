@@ -5,7 +5,16 @@ project(NaiveFS VERSION 0.0.1 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+IF (NOT DEFINED NO_ASAN)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer -fsanitize-recover=address")
+ENDIF()
+
+IF (CMAKE_BUILD_TYPE STREQUAL Release)
+add_compile_options("-Ofast")
+ENDIF()
+
+
 add_compile_options("-Wall" "-W" "-Wextra" "-fPIC" "-g3" "-D_FILE_OFFSET_BITS=64")
 
 # outputs
