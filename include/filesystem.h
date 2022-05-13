@@ -67,9 +67,27 @@ class FileSystem {
    */
   bool get_block(uint32_t index, Block** block);
 
-  bool alloc_inode(ext2_inode** inode);
+  /**
+   * @brief Allocate a new inode in the file system. This operation changes: 1.
+   * super block; 2. group descriptors (maybe a new block group); 3. inode
+   * bitmap; 4. inode table (maybe a new inode table block)
+   *
+   * @param inode new inode allocated
+   * @param index returns inode index
+   * @param dir if the inode to allocate is a directory inode
+   * @return @return true always true (we assume disk space will not ne used up)
+   */
+  bool alloc_inode(ext2_inode** inode, uint32_t* index, bool dir);
 
+  /**
+   * @brief
+   *
+   * @param block
+   * @return true always true (we assume disk space will not be used up)
+   */
   bool alloc_block(Block** block);
+
+  bool alloc_block_group(uint32_t* index);
 
  private:
   // Timestamp
@@ -80,10 +98,8 @@ class FileSystem {
   ext2_inode* root_inode_;
   // Block Groups
   std::map<uint32_t, BlockGroup*> block_groups_;
-
   // block index mapped to block allocated in memory
   BlockCache* block_cache_;
-
   // name mapped to directory entry metadata
   DentryCache* dentry_cache_;
 };

@@ -13,6 +13,7 @@ void SuperBlock::init_super_block() {
       // 1 inode bitmap, 1 block bitmap, 1 inode table block, no data blocks
       super_->s_blocks_count = 3;
       super_->s_inodes_count = 1;  // 1 root inode
+      super_->s_first_ino = ROOT_INODE;
       super_->s_inode_size = sizeof(ext2_inode);
       // set state to normal
       super_->s_state = FSState::NORMAL;
@@ -65,7 +66,7 @@ int64_t BitmapBlock::alloc_new() {
   return i;
 }
 
-BlockGroup::BlockGroup(ext2_group_desc* desc) {
+BlockGroup::BlockGroup(ext2_group_desc* desc) : desc_(desc) {
   ASSERT(desc != nullptr);
 
   INFO("BLOCK BITMAP OFFSET: 0x%x", desc->bg_block_bitmap);
@@ -125,16 +126,22 @@ bool BlockGroup::get_block(uint32_t index, Block** block) {
   return true;
 }
 
-bool BlockGroup::alloc_inode(ext2_inode** inode) {
+bool BlockGroup::alloc_inode(ext2_inode** inode, uint32_t* index, bool dir) {
   int ret = inode_bitmap_->alloc_new();
   if (ret == -1) return false;
 
+  // update block group descriptor
+  desc_->bg_free_inodes_count--;
+  if (dir) desc_->bg_used_dirs_count++;
+
+  if (index != nullptr) *index = ret;
   return get_inode(ret, inode);
 }
 
 bool BlockGroup::alloc_block(Block** block) {
   int ret = block_bitmap_->alloc_new();
   if (ret == -1) return false;
+  desc_->bg_free_blocks_count--;
   return get_block(ret, block);
 }
 

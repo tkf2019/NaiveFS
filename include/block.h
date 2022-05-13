@@ -38,7 +38,8 @@ class Block {
   }
 
   ~Block() {
-    flush();
+    // we need to flush the dirty block manually
+    // flush();
     free(data_);
   }
 
@@ -70,13 +71,22 @@ class SuperBlock : public Block {
     return desc_table_[index];
   }
 
+  inline void put_group_desc(ext2_group_desc* desc) {
+    desc_table_.push_back(desc);
+  }
+
   inline uint64_t block_group_size() {
     return BLOCKS2BYTES(super_->s_blocks_per_group);
   }
 
   inline uint32_t num_block_groups() {
-    uint32_t n = (super_->s_blocks_count + super_->s_blocks_per_group - 1) /
-                 super_->s_blocks_per_group;
+    uint32_t block_n =
+        (super_->s_blocks_count + super_->s_blocks_per_group - 1) /
+        super_->s_blocks_per_group;
+    uint32_t inode_n =
+        (super_->s_inodes_count + super_->s_inodes_per_group - 1) /
+        super_->s_inodes_per_group;
+    uint32_t n = std::max(inode_n, block_n);
     return n ? n : 1;
   }
 
@@ -184,15 +194,18 @@ class BlockGroup {
 
   void flush();
 
+  ext2_group_desc* get_desc() { return desc_; }
+
   bool get_inode(uint32_t index, ext2_inode** inode);
 
   bool get_block(uint32_t index, Block** block);
 
-  bool alloc_inode(ext2_inode** inode);
+  bool alloc_inode(ext2_inode** inode, uint32_t* index, bool dir);
 
   bool alloc_block(Block** block);
 
  private:
+  ext2_group_desc* desc_;
   BitmapBlock* block_bitmap_;
   BitmapBlock* inode_bitmap_;
   std::map<uint32_t, InodeTableBlock*> inode_table_;

@@ -67,7 +67,7 @@ FileSystem::FileSystem()
   // init root inode
   if (!block_groups_[0]->get_inode(ROOT_INODE, &root_inode_)) {
     // alloc new root inode
-    ASSERT(block_groups_[0]->alloc_inode(&root_inode_));
+    ASSERT(block_groups_[0]->alloc_inode(&root_inode_, nullptr, true));
     inode_init(root_inode_);
     // root directory: cannot be written or executed
     root_inode_->i_mode =
@@ -81,10 +81,17 @@ FileSystem::FileSystem()
 
 FileSystem::~FileSystem() {
   delete root_inode_;
+
+  super_block_->flush();
   delete super_block_;
+
   for (auto bg : block_groups_) {
+    bg.second->flush();
     delete bg.second;
   }
+
+  delete block_cache_;
+  delete dentry_cache_;
 }
 
 bool FileSystem::inode_lookup(const Path& path, ext2_inode** inode) {
@@ -133,8 +140,6 @@ bool FileSystem::inode_lookup(const Path& path, ext2_inode** inode) {
   }
   return true;
 }
-
-
 
 void FileSystem::visit_inode_blocks(ext2_inode* inode,
                                     const BlockVisitor& visitor) {
@@ -250,6 +255,56 @@ bool FileSystem::get_block(uint32_t index, Block** block) {
     // Update block cache
     block_cache_->insert(index, *block);
   }
+  return true;
+}
+
+bool FileSystem::alloc_inode(ext2_inode** inode, uint32_t* index, bool dir) {
+  // update super block
+  super_block_->get_super()->s_free_inodes_count--;
+  super_block_->get_super()->s_inodes_count++;
+
+  uint32_t block_group_index;
+  // allocated by block group
+  for (auto bg : block_groups_) {
+    if (bg.second->get_desc()->bg_free_inodes_count) {
+      if (bg.second->alloc_inode(inode, index, dir)) {
+        inode_init(*inode);
+        block_group_index = bg.first;
+        goto alloc_finished;
+      }
+    }
+  }
+
+  // create a new block group
+  alloc_block_group(&block_group_index);
+  if (block_groups_[block_group_index]->alloc_inode(inode, index, dir))
+    goto alloc_finished;
+  WARNING("Allocate inode in the new block group(%i) failed",
+          block_group_index);
+  return false;
+
+alloc_finished:
+  DEBUG("Allocate new inode(%i) in block group(%i)", *index, block_group_index);
+  return true;
+}
+
+bool FileSystem::alloc_block_group(uint32_t* index) {
+  *index = super_block_->num_block_groups();
+  // We assume disk space will not drain out
+  ASSERT(sizeof(ext2_super_block) + *index * sizeof(ext2_group_desc) <=
+         BLOCK_SIZE);
+  ext2_group_desc* desc =
+      (ext2_group_desc*)(super_block_->get() + sizeof(ext2_super_block) +
+                         *index * sizeof(ext2_group_desc));
+  desc->bg_inode_bitmap = BLOCK_SIZE;
+  desc->bg_block_bitmap = desc->bg_inode_bitmap + BLOCK_SIZE;
+  desc->bg_inode_table = desc->bg_block_bitmap + BLOCK_SIZE;
+  desc->bg_free_blocks_count = BLOCKS_PER_GROUP;
+  desc->bg_free_inodes_count = INODES_PER_GROUP;
+  desc->bg_used_dirs_count = 0;
+  super_block_->put_group_desc(desc);
+  block_groups_[*index] = new BlockGroup(desc);
+  DEBUG("Allocate new block group: %i", *index);
   return true;
 }
 
