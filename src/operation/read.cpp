@@ -18,6 +18,7 @@ int fuse_read(const char *path, char *buf, size_t size, off_t offset, struct fus
 }
 
 int fuse_write(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
+  WARNING("WRITE!");
   
   if (fs == nullptr || fi == nullptr) return -EINVAL;
   auto fd = _fuse_trans_info(fi);

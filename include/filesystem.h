@@ -111,6 +111,13 @@ class FileSystem {
    */
   bool seek_last_block(ext2_inode* inode, Block** block, uint32_t* index);
 
+  /**
+   * @brief free blocks
+   * 
+   * 
+   */
+  bool free_block(Block* block) { return true; }
+
  private:
   // Timestamp
   timeval time_;
@@ -122,10 +129,6 @@ class FileSystem {
   std::map<uint32_t, BlockGroup*> block_groups_;
   // block index mapped to block allocated in memory
   BlockCache* block_cache_;
-<<<<<<< HEAD
-
-=======
->>>>>>> 0dd8fc535cf9b36516273fa82366f1a4b64ce260
   // name mapped to directory entry metadata
   DentryCache* dentry_cache_;
 };

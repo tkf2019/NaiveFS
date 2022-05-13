@@ -39,21 +39,23 @@ constexpr uint32_t IBLOCK_12 = BLOCK_SIZE / 4 + 11;
 constexpr uint32_t IBLOCK_13 = (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) + IBLOCK_12;
 constexpr uint32_t IBLOCK_14 = (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) + IBLOCK_13;  // 1074791436
 
+class FileStatus;
+
 class InodeCache {
  public:
   uint32_t inode_id_;               // this inode
   ext2_inode* cache_;               // cache of the inode
   std::shared_mutex inode_rwlock_;  // if a file is opened by many processes, we use this to ensure atomicity.
   std::vector<FileStatus*> vec;     // when inode cache is changed in a critical section, other process must update their cache.
-  void shared_lock() { inode_rwlock_->shared_lock(); }
-  void shared_unlock() { inode_rwlock_->shared_unlock(); }
-  void lock() { inode_rwlock_->lock(); }
-  void unlock() { inode_rwlock_->unlock(); }
-  void init() { inode_cache_ = new ext2_inode; }
-  void copy() {
+  void lock_shared() { inode_rwlock_.lock_shared(); }
+  void unlock_shared() { inode_rwlock_.unlock_shared(); }
+  void lock() { inode_rwlock_.lock(); }
+  void unlock() { inode_rwlock_.unlock(); }
+  void init() { cache_ = new ext2_inode; }
+  int copy() {
     ext2_inode* inode;
     if (!fs->get_inode(inode_id_, &inode)) return -EINVAL;
-    memcpy(inode_cache_, inode, sizeof(ext2_inode));
+    memcpy(cache_, inode, sizeof(ext2_inode));
   }
 };
 
@@ -65,8 +67,15 @@ class FileStatus {
     IndirectBlockPtr(uint32_t indirect_block_id) : id_(indirect_block_id) {}
     bool seek(off_t off, uint32_t& block_id) {
       Block* blk;
-      if (!fs->get_block(indirect_block_id_[0], &blk)) return false;
+      if (!fs->get_block(id_, &blk)) return false;
       block_id = (reinterpret_cast<uint32_t*>(blk->get()))[off];
+      return true;
+    }
+    void set(off_t off, uint32_t block_id) {
+      Block* blk;
+      if (!fs->get_block(id_, &blk)) return false;
+      block_id = (reinterpret_cast<uint32_t*>(blk->get()))[off];
+      return true;
     }
   };
   InodeCache* inode_cache_;
@@ -214,6 +223,72 @@ class FileStatus {
     return 0;
   }
 
+  int _insert_block(uint32_t index) {
+    // copy from next_block
+    /*
+    if (block_id_in_file_ <= IBLOCK_11) {
+      // The first 12 blocks
+      block_id_in_file_++;
+      if (block_id_in_file_ <= IBLOCK_11) {
+        block_id_ = inode_cache_->cache_->i_block[block_id_in_file_] = index;
+      } else {
+        uint32_t indirect_index;
+        fs->alloc_block(&blk, &indirect_index)
+        
+        indirect_block_[0] = IndirectBlockPtr(inode_cache_->cache_->i_block[12]);
+        
+        if (!indirect_block_[0].seek(0, block_id_)) return -EINVAL;
+      }
+    } else if (block_id_in_file_ <= IBLOCK_12) {
+      // The first indirect block
+      block_id_in_file_++;
+      if (block_id_in_file_ <= IBLOCK_12) {
+        if (!indirect_block_[0].seek(block_id_in_file_ - IBLOCK_11 - 1, block_id_)) return -EINVAL;
+      } else {
+        indirect_block_[0] = IndirectBlockPtr(inode_cache_->cache_->i_block[13]);
+        if (!indirect_block_[0].seek(0, indirect_block_[1].id_)) return -EINVAL;
+        if (!indirect_block_[1].seek(0, block_id_)) return -EINVAL;
+      }
+    } else if (block_id_in_file_ <= IBLOCK_13) {
+      // The double indirect block
+      block_id_in_file_++;
+      if (block_id_in_file_ <= IBLOCK_13) {
+        uint32_t first_id = (block_id_in_file_ - IBLOCK_12 - 1) / (BLOCK_SIZE / 4);
+        uint32_t second_id = (block_id_in_file_ - IBLOCK_12 - 1) % (BLOCK_SIZE / 4);
+        if (second_id == 0) {
+          if (!indirect_block_[0].seek(first_id, indirect_block_[1].id_)) return -EINVAL;
+          if (!indirect_block_[1].seek(0, block_id_)) return -EINVAL;
+        } else if (!indirect_block_[1].seek(second_id, block_id_))
+          return -EINVAL;
+      } else {
+        indirect_block_[0] = IndirectBlockPtr(inode_cache_->cache_->i_block[14]);
+        if (!indirect_block_[0].seek(0, indirect_block_[1].id_)) return -EINVAL;
+        if (!indirect_block_[1].seek(0, indirect_block_[2].id_)) return -EINVAL;
+        if (!indirect_block_[2].seek(0, block_id_)) return -EINVAL;
+      }
+    } else if (block_id_in_file_ <= IBLOCK_14) {
+      // The triple indirect block
+      block_id_in_file_++;
+      uint32_t first_id = (block_id_in_file_ - IBLOCK_13 - 1) / ((BLOCK_SIZE / 4) * (BLOCK_SIZE / 4));
+      uint32_t second_id = (block_id_in_file_ - IBLOCK_13 - 1) % ((BLOCK_SIZE / 4) * (BLOCK_SIZE / 4)) / (BLOCK_SIZE / 4);
+      uint32_t third_id = (block_id_in_file_ - IBLOCK_13 - 1) % (BLOCK_SIZE / 4);
+      if (third_id == 0) {
+        if (second_id == 0) {
+          if (!indirect_block_[0].seek(first_id, indirect_block_[1].id_)) return -EINVAL;
+          if (!indirect_block_[1].seek(second_id, indirect_block_[2].id_)) return -EINVAL;
+          if (!indirect_block_[2].seek(third_id, block_id_)) return -EINVAL;
+        } else {
+          if (!indirect_block_[1].seek(second_id, indirect_block_[2].id_)) return -EINVAL;
+          if (!indirect_block_[2].seek(third_id, block_id_)) return -EINVAL;
+        }
+      } else if (!indirect_block_[2].seek(third_id, block_id_))
+        return -EINVAL;
+    } else
+      return -EINVAL;
+    return 0;
+*/
+  }
+
   /**
    * @brief copy_to_buf copy the file to the buf. this function works under writer lock, because it changes file pointer. It works under reader lock
    * of inode_rwlock, because it only reads inode data.
@@ -226,9 +301,9 @@ class FileStatus {
    *
    */
 
-  int copy_to_buf(char* buf, off_t offset, size_t size) {
+  int copy_to_buf(char* buf, size_t offset, size_t size) {
     std::unique_lock<std::shared_mutex> lck(rwlock);
-    std::shared_lock<std::shared_mutex> lck_inode(inode_cache_->inode_rwlock);
+    std::shared_lock<std::shared_mutex> lck_inode(inode_cache_->inode_rwlock_);
     size_t isize = file_size();
     if (offset >= isize) return 0;
     int _err_ret = _upd_cache();
@@ -239,7 +314,7 @@ class FileStatus {
     Block* blk;
     if (!fs->get_block(block_id_, &blk)) return -EINVAL;
     size_t ret = 0;
-    size_t csz = std::min(size, BLOCK_SIZE - offset % BLOCK_SIZE);
+    size_t csz = std::min(size, BLOCK_SIZE - (size_t)offset % BLOCK_SIZE);
     memcpy(buf, blk->get() + offset % BLOCK_SIZE, csz);
     ret += csz, size -= csz, offset += csz;
     while (size) {
@@ -266,63 +341,72 @@ class FileStatus {
    * @return int
    */
 
-  int write(char* buf, off_t offset, size_t size) {
+  int write(char* buf, size_t offset, size_t size) {
     std::unique_lock<std::shared_mutex> lck(rwlock);
-    inode_rwlock->lock_shared();
+    inode_cache_->lock_shared();
     size_t isize = file_size();
     if (offset >= isize) {
-      inode_rwlock->unlock_shared();
+      inode_cache_->unlock_shared();
       return 0;
     }
     int _err_ret = _upd_cache();
     if (_err_ret) {
-      inode_rwlock->unlock_shared();
+      inode_cache_->unlock_shared();
       return _err_ret;
     }
     _err_ret = seek(offset / BLOCK_SIZE);
     if (_err_ret) {
-      inode_rwlock->unlock_shared();
+      inode_cache_->unlock_shared();
       return _err_ret;
     }
     if (offset + size > isize) {
       // Now we need to modify the inode.
-      inode_rwlock->unlock_shared();
-      std::unique_lock<std::shared_mutex> inode_lck(inode_rwlock);
+      inode_cache_->unlock_shared();
+      std::unique_lock<std::shared_mutex> inode_lck(inode_cache_->inode_rwlock_);
       isize = file_size();
       if (offset >= isize) return 0;
       _err_ret = seek(offset / BLOCK_SIZE);
       if (_err_ret) return _err_ret;
+
       Block* blk;
       if (!fs->get_block(block_id_, &blk)) return -EINVAL;
       size_t ret = 0;
-      size_t csz = std::min(size, BLOCK_SIZE - offset % BLOCK_SIZE);
+      size_t csz = std::min(size, BLOCK_SIZE - (size_t)offset % BLOCK_SIZE);
       memcpy(blk->get() + offset % BLOCK_SIZE, buf, csz);
       ret += csz, size -= csz, offset += csz, inode_cache_->cache_->i_size += csz;
-      while(size) {
-        if(offset >= isize) {
-          if(fs->alloc_block(&blk)) return ret;
+
+      while (size) {
+        if (offset >= isize) {
+          uint32_t index;
+          if (!fs->alloc_block(&blk, &index)) return ret;
+          _err_ret = _insert_block(index);
+          if (_err_ret) {
+            if(!fs->free_block(blk)) return -EINVAL;
+            return ret;
+          }
         } else {
           next_block();
-          if(!fs->get_block(block_id_, &blk)) return -EINVAL;
+          if (!fs->get_block(block_id_, &blk)) return -EINVAL;
         }
         csz = std::min(size, (size_t)BLOCK_SIZE);
         memcpy(blk->get(), buf, csz);
         ret += csz, size -= csz, offset += csz, inode_cache_->cache_->i_size += csz;
       }
+
       return ret;
-      
+
     } else {
       Block* blk;
       if (!fs->get_block(block_id_, &blk)) return -EINVAL;
       size_t ret = 0;
-      size_t csz = std::min(size, BLOCK_SIZE - offset % BLOCK_SIZE);
+      size_t csz = std::min(size, BLOCK_SIZE - (size_t)offset % BLOCK_SIZE);
       memcpy(blk->get() + offset % BLOCK_SIZE, buf, csz);
       ret += csz, size -= csz, offset += csz;
       while (size) {
         if (offset >= isize) return ret;
         _err_ret = next_block();
         if (_err_ret) {
-          inode_rwlock->unlock_shared();
+          inode_cache_->unlock_shared();
           return _err_ret;
         }
         if (!fs->get_block(block_id_, &blk)) return -EINVAL;
@@ -330,13 +414,14 @@ class FileStatus {
         memcpy(blk->get(), buf, csz);
         ret += csz, size -= csz, offset += csz;
       }
+      inode_cache_->unlock_shared();
       return ret;
     }
     return 0;
   }
 };
 
-FileStatus* _fuse_trans_info(struct fuse_file_info* fi) { return reinterpret_cast<FileStatus*>(fi->fh); }
+static FileStatus* _fuse_trans_info(struct fuse_file_info* fi) { return reinterpret_cast<FileStatus*>(fi->fh); }
 
 int fuse_getattr(const char* path, struct stat* stbuf, struct fuse_file_info* fi);
 
