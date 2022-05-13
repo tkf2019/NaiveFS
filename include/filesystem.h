@@ -31,7 +31,12 @@ class FileSystem {
    * @return false if inode does not exist or directory in the path has been
    * deleted
    */
-  bool inode_lookup(const Path& path, ext2_inode** inode);
+  bool inode_lookup(const Path& path, ext2_inode** inode, uint32_t* inode_index);
+
+  bool inode_lookup(const Path& path, ext2_inode** inode) {
+    uint32_t _;
+    return inode_lookup(path, inode, &_);
+  }
 
   /**
    * @brief Lookup inode dentry by given name

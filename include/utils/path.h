@@ -15,7 +15,7 @@ class Path {
 #define SEPARATOR(__c) (__c == '/')
 
  public:
-  Path(char* path) : path_(path) {
+  Path(const char* path) : path_(path) {
     ASSERT(strlen(path) > 0);
     const char* ptr = path_;
     off_t curr_off = 0;
@@ -32,7 +32,7 @@ class Path {
   }
 
   Path(const Path& path, size_t slice) : path_(path.path_) {
-    name_list_ = std::vector<std::pair<char*, size_t>>(
+    name_list_ = std::vector<std::pair<const char*, size_t>>(
         path.name_list_.begin(), path.name_list_.begin() + slice);
   }
 
@@ -40,16 +40,16 @@ class Path {
 
   auto end() const noexcept { return name_list_.end(); }
 
-  std::pair<char*, size_t> get(int i) const noexcept { return name_list_[i]; }
+  std::pair<const char*, size_t> get(int i) const noexcept { return name_list_[i]; }
 
   inline size_t size() const noexcept { return name_list_.size(); }
 
   inline bool empty() const noexcept { return name_list_.empty(); }
 
  private:
-  char* path_;
+  const char* path_;
 
-  std::vector<std::pair<char*, size_t>> name_list_;
+  std::vector<std::pair<const char*, size_t>> name_list_;
 };
 }  // namespace naivefs
 

@@ -131,14 +131,14 @@ bool FileSystem::inode_create(const Path& path, ext2_inode** inode, bool dir) {
   return true;
 }
 
-bool FileSystem::inode_lookup(const Path& path, ext2_inode** inode) {
+bool FileSystem::inode_lookup(const Path& path, ext2_inode** inode, uint32_t* inode_index) {
   if (path.empty()) {
     *inode = root_inode_;
     return true;
   }
   DentryCache::Node* link = nullptr;
   size_t curr_index = 0;
-  for (auto elem : path) {
+  for (const auto& elem : path) {
     auto node = dentry_cache_->lookup(link, elem.first, elem.second);
     if (node == nullptr) {
       int64_t result = -1;
@@ -159,6 +159,7 @@ bool FileSystem::inode_lookup(const Path& path, ext2_inode** inode) {
             }
             return false;
           });
+      *inode_index = result;
       if (result == -1) {
         *inode = nullptr;
         return false;

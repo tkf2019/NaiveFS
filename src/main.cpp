@@ -78,6 +78,7 @@ void test_dentry_cache() {
 
 int main(int argc, char *argv[]) {
   logging_open("test.log");
+  INFO("log begin");
 
   test_dentry_cache();
 

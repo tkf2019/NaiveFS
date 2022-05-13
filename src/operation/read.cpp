@@ -27,7 +27,7 @@ int fuse_write(const char *path, char *buf, size_t size, off_t offset, struct fu
   if (!fd) return -EINVAL;
   if ((fi->flags & O_ACCMODE) == O_RDONLY) return -EINVAL;
 
-  return fd->write(buf, offset, size);
+  return (fi->flags & O_APPEND) ? fd->append(buf, offset, size) : fd->write(buf, offset, size);
 }
 
 }  // namespace naivefs
