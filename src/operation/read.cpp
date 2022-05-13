@@ -3,21 +3,18 @@
 namespace naivefs {
 
 // options global_options;
-
-int fuse_read(const char *path, char *buf, size_t size, off_t offset,
-         struct fuse_file_info *fi) {
+// it returns the number of bytes it read if success.
+int fuse_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
   WARNING("READ!");
-  size_t len;
-  (void)fi;
-  if (strcmp(path + 1, "hello") != 0) return -ENOENT;
+  // TODO: locking, poll events
+  if (fs == nullptr || fi == nullptr) return -EINVAL;
+  auto fd = _fuse_trans_info(fi);
 
-  len = strlen("Hello World!");
-  if ((size_t)offset < len) {
-    if (offset + size > len) size = len - offset;
-    memcpy(buf, "Hello World!" + offset, size);
-  } else
-    size = 0;
+  // File handle is not valid.
+  if (!fd) return -EINVAL;
+  if ((fi->flags & O_ACCMODE) == O_WRONLY) return -EINVAL;
 
-  return size;
+  return fd->copy_to_buf(buf);
 }
+
 }  // namespace naivefs

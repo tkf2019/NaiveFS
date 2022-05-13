@@ -56,9 +56,7 @@ static void inode_display(ext2_inode* inode) {
 }
 
 FileSystem::FileSystem()
-    : super_block_(new SuperBlock()),
-      block_cache_(new BlockCache(BLOCK_CACHE_SIZE)),
-      dentry_cache_(new DentryCache(BLOCK_CACHE_SIZE)) {
+    : super_block_(new SuperBlock()), block_cache_(new BlockCache(BLOCK_CACHE_SIZE)), dentry_cache_(new DentryCache(BLOCK_CACHE_SIZE)) {
   DEBUG("Initialize file system");
 
   // init first block group
@@ -70,8 +68,7 @@ FileSystem::FileSystem()
     ASSERT(block_groups_[0]->alloc_inode(&root_inode_));
     inode_init(root_inode_);
     // root directory: cannot be written or executed
-    root_inode_->i_mode =
-        EXT2_S_IFDIR | EXT2_S_IRUSR | EXT2_S_IRGRP | EXT2_S_IROTH;
+    root_inode_->i_mode = EXT2_S_IFDIR | EXT2_S_IRUSR | EXT2_S_IRGRP | EXT2_S_IROTH;
   } else {
     inode_display(root_inode_);
   }
@@ -134,13 +131,9 @@ bool FileSystem::inode_lookup(const Path& path, ext2_inode** inode) {
   return true;
 }
 
-
-
-void FileSystem::visit_inode_blocks(ext2_inode* inode,
-                                    const BlockVisitor& visitor) {
+void FileSystem::visit_inode_blocks(ext2_inode* inode, const BlockVisitor& visitor) {
   if (S_ISDIR(inode->i_mode) || S_ISREG(inode->i_mode)) {
-    uint32_t num_blocks =
-        inode->i_blocks / (2 << super_block_->get_super()->s_log_block_size);
+    uint32_t num_blocks = inode->i_blocks / (2 << super_block_->get_super()->s_log_block_size);
     Block *block = nullptr, *indirect_block = nullptr;
     uint32_t curr_num = 0;
 
@@ -182,8 +175,7 @@ void FileSystem::visit_inode_blocks(ext2_inode* inode,
           while (curr_num < num_blocks && dptr != dend) {
             Block* double_indirect_block;
             uint32_t double_indirect_index = *dptr;
-            if (!get_block(double_indirect_index, &double_indirect_block))
-              goto error_occured;
+            if (!get_block(double_indirect_index, &double_indirect_block)) goto error_occured;
             if (visitor(double_indirect_block)) goto visit_finished;
             dptr++;
             curr_num++;
@@ -214,14 +206,14 @@ bool FileSystem::get_inode(uint32_t index, ext2_inode** inode) {
     WARNING("Inode index exceeds inodes count");
     return false;
   }
-  // lasy read
+  // lazy read
   uint32_t block_group_index = index / super_block_->inodes_per_group();
-  if (block_groups_.find(block_group_index) == block_groups_.end()) {
-    block_groups_[block_group_index] =
-        new BlockGroup(super_block_->get_group_desc(block_group_index));
+  auto iter = block_groups_.find(block_group_index);
+  if (iter == block_groups_.end()) {
+    iter = block_groups_.insert({block_group_index, new BlockGroup(super_block_->get_group_desc(block_group_index))}).first;
   }
   uint32_t inner_index = index % super_block_->inodes_per_group();
-  if (!block_groups_[block_group_index]->get_inode(inner_index, inode)) {
+  if (!iter->second->get_inode(inner_index, inode)) {
     WARNING("Inode has not been allocated in the target block group");
     return false;
   }
@@ -238,12 +230,12 @@ bool FileSystem::get_block(uint32_t index, Block** block) {
   if (*block == nullptr) {
     // lasy read
     uint32_t block_group_index = index / super_block_->blocks_per_group();
-    if (block_groups_.find(block_group_index) == block_groups_.end()) {
-      block_groups_[block_group_index] =
-          new BlockGroup(super_block_->get_group_desc(block_group_index));
+    auto iter = block_groups_.find(block_group_index);
+    if (iter == block_groups_.end()) {
+      iter = block_groups_.insert({block_group_index, new BlockGroup(super_block_->get_group_desc(block_group_index))}).first;
     }
     uint32_t inner_index = index % super_block_->blocks_per_group();
-    if (!block_groups_[block_group_index]->get_block(inner_index, block)) {
+    if (!iter->second->get_block(inner_index, block)) {
       WARNING("Block has not been allocated in the target block group");
       return false;
     }
