@@ -4,11 +4,16 @@ namespace naivefs {
 // options global_options;
 
 int fuse_open(const char *path, struct fuse_file_info *fi) {
+  static std::mutex m_;
+  std::unique_lock<std::mutex> lck(m_);
   INFO("OPEN: %s", path);
 
   ext2_inode* inode;
   uint32_t inode_id;
-  if(!fs->inode_lookup(path, &inode, &inode_id)) return -EINVAL;
+  if(!fs->inode_lookup(path, &inode, &inode_id)) {
+    if(!(fi->flags & O_CREAT)) return -EINVAL; 
+    if(!fs->inode_create(path, &inode, false)) return -EINVAL;
+  }
 
   auto fd = new FileStatus;
   fd->cache_update_flag_ = false;

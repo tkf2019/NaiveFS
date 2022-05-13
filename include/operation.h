@@ -89,9 +89,25 @@ class FileStatus {
   bool check_size(off_t off, size_t counts) { return counts + off > (size_t)inode_cache_->cache_->i_size; }
   size_t file_size() { return inode_cache_->cache_->i_size; }
 
+  /**
+   * @brief next_block: get the next block of block_id_in_file_, and block_id_in_file_ += 1
+   * @brief seek: given a new value of block_id_in_file_, seek block_id_ using old values indirect_block_
+   * @brief bf_seek: seek, but don't use any old values
+   * They are not atomic.
+   *
+   *
+   * @return int, 0 if success, else a negative integer
+   */
+
   int next_block();
   int seek(uint32_t new_block_id_in_file);
   int bf_seek(uint32_t new_block_id_in_file);
+
+  /**
+   * @brief update indirect_block_ by bf_seek
+   *
+   * @return int
+   */
 
   int _upd_cache() {
     if (cache_update_flag_) {
@@ -100,6 +116,11 @@ class FileStatus {
     }
     return 0;
   }
+
+  /**
+   * @brief init the file pointers
+   *
+   */
 
   void init_seek() {
     std::shared_lock<std::shared_mutex> lck_inode(inode_cache_->inode_rwlock_);
@@ -125,6 +146,8 @@ class FileStatus {
    * performed at one data block at the same time. But we ensure that operations on inode metadata are serializable. We ensure that operations on
    * FileStatus itself are serializable.
    *
+   * if append_flag is true then offset is set to the end of the file at beginning.
+   *
    * @param buf
    * @param offset
    * @param size
@@ -137,6 +160,12 @@ class FileStatus {
 
 class OpManager {
  public:
+  /**
+   * @brief Get the cache object by inode_id
+   *
+   * @param inode_id
+   * @return InodeCache*
+   */
   InodeCache* get_cache(uint32_t inode_id) {
     std::unique_lock<std::shared_mutex> lck(m_);
     if (!st_.count(inode_id)) {
@@ -147,6 +176,12 @@ class OpManager {
     }
     return st_[inode_id];
   }
+  /**
+   * @brief update the vector in the cache object
+   *
+   * @param fd
+   * @param inode_id
+   */
   void upd_cache(FileStatus* fd, uint32_t inode_id) {
     std::unique_lock<std::shared_mutex> lck(m_);
     if (!st_.count(inode_id)) return;
