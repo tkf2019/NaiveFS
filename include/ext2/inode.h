@@ -13,6 +13,29 @@
 #define EXT2_N_BLOCKS (EXT2_TIND_BLOCK + 1)
 
 /*
+ *  Defined i_mode values
+ */
+#define EXT2_S_IFSOCK 0xC000 /* socket */
+#define EXT2_S_IFLINK 0xA000 /* synbolic link */
+#define EXT2_S_IFREG 0x8000  /* regular file */
+#define EXT2_S_IFBLK 0x6000  /* block device */
+#define EXT2_S_IFDIR 0x4000  /* directory */
+#define EXT2_S_IFCHR 0x2000  /* character device */
+#define EXT2_S_IFIFO 0x1000  /* fifo */
+#define EXT2_S_ISUID 0x0800  /* set process user id */
+#define EXT2_S_ISGID 0x0400  /* set process group id */
+#define EXT2_S_ISVTX 0x0200  /* sticky bit */
+#define EXT2_S_IRUSR 0x0100  /* user read */
+#define EXT2_S_IWUSR 0x0080  /* user write */
+#define EXT2_S_IXUSR 0x0040  /* user execute */
+#define EXT2_S_IRGRP 0x0020  /* group read */
+#define EXT2_S_IWGRP 0x0010  /* group write */
+#define EXT2_S_IXGRP 0x0008  /* group execute */
+#define EXT2_S_IROTH 0x0004  /* others read */
+#define EXT2_S_IWOTH 0x0002  /* others write */
+#define EXT2_S_IXOTH 0x0001  /* others execute */
+
+/*
  * Structure of an inode on the disk
  */
 struct ext2_inode {

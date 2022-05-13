@@ -2,6 +2,9 @@
 #define NAIVEFS_INCLUDE_COMMON_H_
 
 #include <stdint.h>
+#include <sys/time.h>
+
+#include <algorithm>
 
 namespace naivefs {
 // disk
@@ -31,6 +34,34 @@ namespace naivefs {
 #define TOTAL_BLOCKS_PER_GROUP BLOCKS_PER_GROUP + NUM_INODE_TABLE_BLOCKS + 2
 
 #define ROOT_INODE 0
+
+// File system state (super_block.s_state)
+enum FSState { UNINIT = 0x0, NORMAL = 0x1 };
+
+constexpr static const uint32_t NUM_INDIRECT_BLOCKS =
+    BLOCK_SIZE / sizeof(uint32_t);
+enum IndirectLevel { SINGLE = 1, DOUBLE = 2, TRIPPLE = 3 };
+
+#define UPDATE_TIME(__val)      \
+  ({                            \
+    timeval time;               \
+    gettimeofdata(&time, NULL); \
+    __val = time.tv_sec;        \
+  })
+
+#define ACCESS_INODE(__i) UPDATE_TIME(__i->i_atime)
+#define MODIFY_INODE(__i) UPDATE_TIME(__i->i_mtime)
+
+#define BLOCK_CACHE_SIZE 1024  // TODO: maybe larger ?
+
+// dentry types
+
+#define DENTRY_DIR 0x4
+#define DENTRY_REG 0x8
+
+#define DENTRY_ISDIR(__t) (__t == DENTRY_DIR)
+#define DENTRY_ISREG(__t) (__t == DENTRY_REG)
+
 }  // namespace naivefs
 
 #endif
