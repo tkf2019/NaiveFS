@@ -165,7 +165,7 @@ class DentryBlock {
    * the same position.
    *
    */
-  DentryBlock(Block* block) {
+  DentryBlock(Block* block) : block_(block) {
     uint8_t* data = block->get();
     ext2_dir_entry_2* dentry = (ext2_dir_entry_2*)data;
     while (true) {
@@ -176,14 +176,31 @@ class DentryBlock {
       }
       dentries_.push_back(dentry);
       data += dentry->rec_len;
+      size_ += dentry->rec_len;
       dentry = (ext2_dir_entry_2*)data;
     }
   }
 
   std::vector<ext2_dir_entry_2*>* get() { return &dentries_; }
 
+  ext2_dir_entry_2* alloc_dentry(const char* name, size_t name_len,
+                                 uint32_t inode, bool dir) {
+    ext2_dir_entry_2* dentry = (ext2_dir_entry_2*)(block_->get() + size_);
+    dentry->inode = inode;
+    dentry->name_len = name_len;
+    dentry->rec_len = sizeof(ext2_dir_entry_2) + name_len;
+    dentry->file_type = dir ? DENTRY_DIR : DENTRY_REG;
+    strncpy(dentry->name, name, name_len);
+    dentries_.push_back(dentry);
+    return dentry;
+  }
+
+  size_t size() { return size_; }
+
  private:
+  Block* block_;
   std::vector<ext2_dir_entry_2*> dentries_;
+  size_t size_;
 };
 
 class BlockGroup {
@@ -202,7 +219,7 @@ class BlockGroup {
 
   bool alloc_inode(ext2_inode** inode, uint32_t* index, bool dir);
 
-  bool alloc_block(Block** block);
+  bool alloc_block(Block** block, uint32_t* index);
 
  private:
   ext2_group_desc* desc_;

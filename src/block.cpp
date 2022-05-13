@@ -138,10 +138,14 @@ bool BlockGroup::alloc_inode(ext2_inode** inode, uint32_t* index, bool dir) {
   return get_inode(ret, inode);
 }
 
-bool BlockGroup::alloc_block(Block** block) {
+bool BlockGroup::alloc_block(Block** block, uint32_t* index) {
   int ret = block_bitmap_->alloc_new();
   if (ret == -1) return false;
+
+  // update block group descriptor
   desc_->bg_free_blocks_count--;
+
+  if (index != nullptr) *index = ret;
   return get_block(ret, block);
 }
 

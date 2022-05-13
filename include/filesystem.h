@@ -22,6 +22,8 @@ class FileSystem {
 
   inline ext2_super_block* super() { return super_block_->get_super(); }
 
+  bool inode_create(const Path& path, ext2_inode** inode, bool dir);
+
   /**
    * @brief Lookup inode by given path
    *
@@ -80,14 +82,34 @@ class FileSystem {
   bool alloc_inode(ext2_inode** inode, uint32_t* index, bool dir);
 
   /**
-   * @brief
+   * @brief Allocate a new block in the file system. This operation changes: 1.
+   * super block; 2. group descriptors (maybe a new block group); 3. block
+   * bitmap
    *
-   * @param block
-   * @return true always true (we assume disk space will not be used up)
+   * @return always true (we assume disk space will not be used up)
    */
-  bool alloc_block(Block** block);
+  bool alloc_block(Block** block, uint32_t *index);
 
+  /**
+   * @brief Allocate a new block for the inode
+   *
+   * @return always true (we assume disk space will not be used up)
+   */
+  bool alloc_block(ext2_inode* inode);
+
+  /**
+   * @brief Allocatea a new block group
+   *
+   * @param index
+   * @return always true (we assume disk space will not be used up)
+   */
   bool alloc_block_group(uint32_t* index);
+
+  /**
+   * Seek to the last block of the inode. Returns NULL if no block has been
+   * allocated.
+   */
+  Block* seek_last_block(ext2_inode* inode);
 
  private:
   // Timestamp
