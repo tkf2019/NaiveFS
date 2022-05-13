@@ -232,7 +232,7 @@ class BlockGroup {
   off_t data_block_offset(uint32_t data_block_index);
 };
 
-typedef std::function<bool(Block*)> BlockVisitor;
+typedef std::function<bool(uint32_t, Block*)> BlockVisitor;
 }  // namespace naivefs
 
 #endif

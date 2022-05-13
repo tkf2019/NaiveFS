@@ -106,25 +106,30 @@ bool FileSystem::inode_create(const Path& path, ext2_inode** inode, bool dir) {
   if (!alloc_inode(inode, &inode_index, dir)) return false;
 
   // update parent dentry block
-  Block* last_block = seek_last_block(parent);
+  Block* last_block;
+  uint32_t last_block_index;
+  ASSERT(seek_last_block(parent, &last_block, &last_block_index));
   if (last_block == nullptr) {
-    uint32_t last_block_index;
-    if (!alloc_block(&last_block, &last_block_index)) {
+    if (!alloc_block(&last_block, &last_block_index, parent)) {
       return false;
     }
   }
-
-  DentryBlock dentry_block(last_block);
+  DentryBlock* dentry_block = new DentryBlock(last_block);
   auto last_item = path.get(path.size() - 1);
-  if (dentry_block.size() + sizeof(ext2_dir_entry_2) + last_item.second >
+  if (dentry_block->size() + sizeof(ext2_dir_entry_2) + last_item.second >
       BLOCK_SIZE) {
-    
-  } else {
-    dentry_block.alloc_dentry(last_item.first, last_item.second, inode_index,
-                              dir);
-    // We cannot put the new dentry into cache because we do not know the
-    // parent. We add the dentry into cache after next lookup.
+    if (!alloc_block(&last_block, &last_block_index, parent)) return false;
+    delete dentry_block;
+    dentry_block = new DentryBlock(last_block);
   }
+  dentry_block->alloc_dentry(last_item.first, last_item.second, inode_index,
+                             dir);
+  block_cache_->modify(last_block_index);
+  // We cannot put the new dentry into cache because we do not know the
+  // parent. We add the dentry into cache after next lookup.
+
+  delete dentry_block;
+  return true;
 }
 
 bool FileSystem::inode_lookup(const Path& path, ext2_inode** inode) {
@@ -138,22 +143,23 @@ bool FileSystem::inode_lookup(const Path& path, ext2_inode** inode) {
     auto node = dentry_cache_->lookup(link, elem.first, elem.second);
     if (node == nullptr) {
       int64_t result = -1;
-      visit_inode_blocks(*inode, [this, elem, &result, &inode](Block* block) {
-        DentryBlock dentry_block(block);
-        for (auto dentry : *dentry_block.get()) {
-          if (dentry->name_len != elem.second) continue;
-          if (memcmp(elem.first, dentry->name, dentry->name_len)) continue;
-          if (!this->get_inode(dentry->inode, inode)) {
-            WARNING("INODE should exist with a valid directory entry!");
-            result = -1;
-            return true;
-          }
-          // find a matched directory entry
-          result = dentry->inode;
-          return true;
-        }
-        return false;
-      });
+      visit_inode_blocks(
+          *inode, [this, elem, &result, &inode](uint32_t index, Block* block) {
+            DentryBlock dentry_block(block);
+            for (auto dentry : *dentry_block.get()) {
+              if (dentry->name_len != elem.second) continue;
+              if (memcmp(elem.first, dentry->name, dentry->name_len)) continue;
+              if (!this->get_inode(dentry->inode, inode)) {
+                WARNING("INODE should exist with a valid directory entry!");
+                result = -1;
+                return true;
+              }
+              // find a matched directory entry
+              result = dentry->inode;
+              return true;
+            }
+            return false;
+          });
       if (result == -1) {
         *inode = nullptr;
         return false;
@@ -176,76 +182,73 @@ bool FileSystem::inode_lookup(const Path& path, ext2_inode** inode) {
 
 void FileSystem::visit_inode_blocks(ext2_inode* inode,
                                     const BlockVisitor& visitor) {
+  ASSERT(inode != nullptr && !S_ISDIR(inode->i_mode) &&
+         !S_ISREG(inode->i_mode));
   uint32_t num_blocks =
       inode->i_blocks / (2 << super_block_->get_super()->s_log_block_size);
   if (num_blocks == 0) return;
-  if ((S_ISDIR(inode->i_mode) || S_ISREG(inode->i_mode))) {
-    Block *block = nullptr, *indirect_block = nullptr;
-    uint32_t curr_num = 0;
+  Block *block = nullptr, *indirect_block = nullptr;
+  uint32_t curr_num = 0;
 
-    for (int i = 0; i < EXT2_N_BLOCKS; ++i) {
-      if (i < EXT2_NDIR_BLOCKS) {
-        if (!get_block(inode->i_block[i], &block)) goto error_occured;
-        if (visitor(block)) goto visit_finished;
-        if (++curr_num == num_blocks) goto visit_finished;
-      } else if (i == EXT2_IND_BLOCK) {
-        if (!get_block(inode->i_block[i], &block)) goto error_occured;
-        ASSERT(num_blocks - curr_num == EXT2_NDIR_BLOCKS);
+  for (int i = 0; i < EXT2_N_BLOCKS; ++i) {
+    if (i < EXT2_NDIR_BLOCKS) {
+      if (!get_block(inode->i_block[i], &block)) goto error_occured;
+      if (visitor(inode->i_block[i], block)) goto visit_finished;
+      if (++curr_num == num_blocks) goto visit_finished;
+    } else if (i == EXT2_IND_BLOCK) {
+      if (!get_block(inode->i_block[i], &block)) goto error_occured;
+      ASSERT(num_blocks - curr_num == MAX_DIR_BLOCKS);
 
-        uint32_t* ptr = (uint32_t*)block->get();
-        uint32_t* end = ptr + NUM_INDIRECT_BLOCKS;
+      uint32_t* ptr = (uint32_t*)block->get();
+      uint32_t* end = ptr + NUM_INDIRECT_BLOCKS;
 
-        while (curr_num < num_blocks && ptr != end) {
-          uint32_t indirect_index = *ptr;
-          if (!get_block(indirect_index, &indirect_block)) goto error_occured;
-          if (visitor(indirect_block)) goto visit_finished;
-          ptr++;
+      while (curr_num < num_blocks && ptr != end) {
+        uint32_t indirect_index = *ptr;
+        if (!get_block(indirect_index, &indirect_block)) goto error_occured;
+        if (visitor(indirect_index, indirect_block)) goto visit_finished;
+        ptr++;
+        curr_num++;
+      }
+
+      if (curr_num == num_blocks) goto visit_finished;
+    } else if (i == EXT2_DIND_BLOCK) {
+      if (!get_block(inode->i_block[i], &block)) goto error_occured;
+      ASSERT(num_blocks - curr_num == MAX_DIR_BLOCKS + MAX_IND_BLOCKS);
+
+      uint32_t* ptr = (uint32_t*)block->get();
+      uint32_t* end = ptr + NUM_INDIRECT_BLOCKS;
+
+      while (curr_num < num_blocks && ptr != end) {
+        uint32_t indirect_index = *ptr;
+        if (!get_block(indirect_index, &indirect_block)) goto error_occured;
+
+        uint32_t* dptr = (uint32_t*)indirect_block->get();
+        uint32_t* dend = dptr + NUM_INDIRECT_BLOCKS;
+        while (curr_num < num_blocks && dptr != dend) {
+          Block* double_indirect_block;
+          uint32_t double_indirect_index = *dptr;
+          if (!get_block(double_indirect_index, &double_indirect_block))
+            goto error_occured;
+          if (visitor(double_indirect_index, double_indirect_block))
+            goto visit_finished;
+          dptr++;
           curr_num++;
         }
-
         if (curr_num == num_blocks) goto visit_finished;
-      } else if (i == EXT2_DIND_BLOCK) {
-        if (!get_block(inode->i_block[i], &block)) goto error_occured;
-        ASSERT(num_blocks - curr_num == EXT2_NDIR_BLOCKS);
-
-        uint32_t* ptr = (uint32_t*)block->get();
-        uint32_t* end = ptr + NUM_INDIRECT_BLOCKS;
-
-        while (curr_num < num_blocks && ptr != end) {
-          Block* indirect_block;
-          uint32_t indirect_index = *ptr;
-          if (!get_block(indirect_index, &indirect_block)) goto error_occured;
-
-          uint32_t* dptr = (uint32_t*)indirect_block->get();
-          uint32_t* dend = dptr + NUM_INDIRECT_BLOCKS;
-          while (curr_num < num_blocks && dptr != dend) {
-            Block* double_indirect_block;
-            uint32_t double_indirect_index = *dptr;
-            if (!get_block(double_indirect_index, &double_indirect_block))
-              goto error_occured;
-            if (visitor(double_indirect_block)) goto visit_finished;
-            dptr++;
-            curr_num++;
-          }
-          if (curr_num == num_blocks) goto visit_finished;
-          ptr++;
-        }
-        if (curr_num == num_blocks) goto visit_finished;
-      } else if (i == EXT2_TIND_BLOCK) {
-        WARNING("Not supported: Too big file!");
-        goto error_occured;
+        ptr++;
       }
+      if (curr_num == num_blocks) goto visit_finished;
+    } else if (i == EXT2_TIND_BLOCK) {
+      WARNING("Not supported: Too big file!");
+      goto error_occured;
     }
-  visit_finished:
-    DEBUG("Finished visiting inode blocks: current index %i", curr_num);
-    return;
-  error_occured:
-    WARNING("Error occured while visiting inode blocks!");
-    return;
-  } else {
-    WARNING("Unimplemented inode type!");
-    return;
   }
+visit_finished:
+  DEBUG("Finished visiting inode blocks: current index %i", curr_num);
+  return;
+error_occured:
+  WARNING("Error occured while visiting inode blocks!");
+  return;
 }
 
 bool FileSystem::get_inode(uint32_t index, ext2_inode** inode) {
@@ -347,20 +350,81 @@ bool FileSystem::alloc_block(Block** block, uint32_t* index) {
   if (block_groups_[block_group_index]->alloc_block(block, index))
     goto alloc_finished;
 
-  WARNING("Allocate block in the new block group(%i) failed",
+  WARNING("Failed to allocate block in the new block group %i",
           block_group_index);
   return false;
 
 alloc_finished:
   // must be converted to the index of the whole file system
   *index = block_group_index * super_block_->blocks_per_group() + *index;
+  // add to block cache
+  block_cache_->insert(*index, *block);
   DEBUG("Allocate new inode %i in block group %i", *index, block_group_index);
   return true;
 }
 
-bool FileSystem::alloc_block(ext2_inode* inode) {
-  ASSERT(inode != nullptr);
-  
+bool FileSystem::alloc_block(Block** block, uint32_t* index,
+                             ext2_inode* inode) {
+  ASSERT(inode != nullptr && !S_ISDIR(inode->i_mode) &&
+         !S_ISREG(inode->i_mode));
+  uint32_t block_index;
+  uint32_t num_blocks =
+      inode->i_blocks / (2 << super_block_->get_super()->s_log_block_size);
+  Block* indirect_block = nullptr;
+  if (!alloc_block(block, &block_index)) goto error_occured;
+
+  if (num_blocks < MAX_DIR_BLOCKS) {
+    inode->i_blocks += 4;
+    inode->i_block[num_blocks] = block_index;
+  } else if (num_blocks < MAX_DIR_BLOCKS + MAX_IND_BLOCKS) {
+    if (!get_block(inode->i_block[EXT2_IND_BLOCK], &indirect_block))
+      goto error_occured;
+    uint32_t* ptr = (uint32_t*)indirect_block->get();
+    *(ptr + (num_blocks - MAX_DIR_BLOCKS)) = block_index;
+    inode->i_blocks += 4;
+    // update block cache
+    block_cache_->modify(inode->i_block[EXT2_IND_BLOCK]);
+  } else if (num_blocks < MAX_DIR_BLOCKS + MAX_IND_BLOCKS + MAX_DIND_BLOCKS) {
+    if (!get_block(inode->i_block[EXT2_DIND_BLOCK], &indirect_block))
+      goto error_occured;
+
+    uint32_t num_indirects =
+        (num_blocks - MAX_DIR_BLOCKS - MAX_IND_BLOCKS) / NUM_INDIRECT_BLOCKS;
+    ASSERT(num_indirects <= NUM_INDIRECT_BLOCKS);
+    uint32_t inner_index =
+        (num_blocks - MAX_DIR_BLOCKS - MAX_IND_BLOCKS) % NUM_INDIRECT_BLOCKS;
+    uint32_t double_indirect_index;
+    Block* double_indirect_block;
+    if (inner_index == 0) {
+      // double indirect blocks has been full
+      if (!alloc_block(&double_indirect_block, &double_indirect_index))
+        goto error_occured;
+      uint32_t* ptr = (uint32_t*)double_indirect_block->get();
+      *ptr = block_index;
+      inode->i_blocks += 4;
+      // update new double indirect block
+      block_cache_->modify(double_indirect_index);
+    } else {
+      uint32_t* ptr = (uint32_t*)indirect_block->get();
+      double_indirect_index = *(ptr + num_indirects - 1);
+      if (!get_block(double_indirect_index, &double_indirect_block))
+        goto error_occured;
+      uint32_t* double_ptr = (uint32_t*)double_indirect_block->get();
+      *(double_ptr + inner_index) = block_index;
+      inode->i_blocks += 4;
+      // update new double indirect block
+      block_cache_->modify(double_indirect_index);
+    }
+  } else {
+    WARNING("Not supported: Too big file!");
+    goto error_occured;
+  }
+  *index = block_index;
+  return true;
+
+error_occured:
+  WARNING("Error occured while allocating inode blocks!");
+  return false;
 }
 
 bool FileSystem::alloc_block_group(uint32_t* index) {
@@ -383,14 +447,21 @@ bool FileSystem::alloc_block_group(uint32_t* index) {
   return true;
 }
 
-Block* FileSystem::seek_last_block(ext2_inode* inode) {
-  if (inode == nullptr) return nullptr;
+bool FileSystem::seek_last_block(ext2_inode* inode, Block** block,
+                                 uint32_t* index) {
+  if (inode == nullptr) return false;
   Block* last_block = nullptr;
-  visit_inode_blocks(inode, [&last_block](Block* block) {
-    last_block = block;
-    return false;
-  });
-  return last_block;
+  uint32_t last_index;
+  // TODO: it can be faster (skip blocks)
+  visit_inode_blocks(inode,
+                     [&last_block, &last_index](uint32_t index, Block* block) {
+                       last_block = block;
+                       last_index = index;
+                       return false;
+                     });
+  *block = last_block;
+  *index = last_index;
+  return true;
 }
 
 }  // namespace naivefs

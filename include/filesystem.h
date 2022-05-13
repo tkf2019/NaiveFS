@@ -88,14 +88,14 @@ class FileSystem {
    *
    * @return always true (we assume disk space will not be used up)
    */
-  bool alloc_block(Block** block, uint32_t *index);
+  bool alloc_block(Block** block, uint32_t* index);
 
   /**
    * @brief Allocate a new block for the inode
    *
    * @return always true (we assume disk space will not be used up)
    */
-  bool alloc_block(ext2_inode* inode);
+  bool alloc_block(Block** block, uint32_t* index, ext2_inode* inode);
 
   /**
    * @brief Allocatea a new block group
@@ -109,7 +109,7 @@ class FileSystem {
    * Seek to the last block of the inode. Returns NULL if no block has been
    * allocated.
    */
-  Block* seek_last_block(ext2_inode* inode);
+  bool seek_last_block(ext2_inode* inode, Block** block, uint32_t* index);
 
  private:
   // Timestamp
