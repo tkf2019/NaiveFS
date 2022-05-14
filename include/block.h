@@ -121,6 +121,10 @@ class SuperBlock : public Block {
     return BLOCKS2BYTES(desc_table_[n_group]->bg_inode_table);
   }
 
+  inline uint32_t num_aligned_blocks(uint32_t iblocks) {
+    return iblocks / (2 << super_->s_log_block_size);
+  }
+
  private:
   ext2_super_block* super_;
   std::vector<ext2_group_desc*> desc_table_;
@@ -146,7 +150,7 @@ class InodeTableBlock : public Block {
  public:
   InodeTableBlock(off_t offset) : Block(offset) {
     ext2_inode* ptr = (ext2_inode*)data_;
-    for (uint32_t i = 0; i < INODE_PER_BLOCK; ++i) {
+    for (uint32_t i = 0; i < INODES_PER_BLOCK; ++i) {
       inodes_.push_back(ptr++);
     }
   }
@@ -165,12 +169,12 @@ class DentryBlock {
    * the same position.
    *
    */
-  DentryBlock(Block* block) : block_(block) {
+  DentryBlock(Block* block) : block_(block), size_(0) {
     uint8_t* data = block->get();
     ext2_dir_entry_2* dentry = (ext2_dir_entry_2*)data;
     while (true) {
-      if (dentry->rec_len == 0 || !DENTRY_ISDIR(dentry->file_type) ||
-          !DENTRY_ISREG(dentry->file_type)) {
+      if (dentry->rec_len == 0 || (!DENTRY_ISDIR(dentry->file_type) &&
+                                   !DENTRY_ISREG(dentry->file_type))) {
         // We ensure that directory entries are APPENDED to the data block.
         break;
       }

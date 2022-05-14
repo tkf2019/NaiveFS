@@ -19,6 +19,7 @@ BlockCache::~BlockCache() {
 }
 
 void BlockCache::insert(uint32_t index, Block* block) {
+  DEBUG("Inserting %u to block cache", index);
   Node* node = nullptr;
   if (map_.find(index) == map_.end()) {
     if (free_entries_.empty()) {
@@ -43,6 +44,7 @@ void BlockCache::insert(uint32_t index, Block* block) {
 }
 
 Block* BlockCache::get(uint32_t index) {
+  DEBUG("Getting %u from block cache", index);
   Node* node = nullptr;
   if (map_.find(index) == map_.end()) {
     return nullptr;
@@ -72,7 +74,8 @@ DentryCache::~DentryCache() {
 
 DentryCache::Node* DentryCache::insert(Node* parent, const char* name,
                                        size_t name_len, uint32_t inode) {
-  DEBUG("Inserting %s,%d to dentry cache", name, name_len);
+  DEBUG("Inserting %s,%d to dentry cache", std::string(name, name_len).c_str(),
+        name_len);
 
   if (parent == nullptr) parent = root_;
 
@@ -97,7 +100,8 @@ DentryCache::Node* DentryCache::lookup(Node* parent, const char* name,
   if (parent == nullptr) parent = root_;
 
   if (parent->childs_ == nullptr) {
-    DEBUG("Looking up %s,%d: Not found (no childs)", name, name_len);
+    DEBUG("Looking up %s,%d: Not found (no childs)",
+          std::string(name, name_len).c_str(), name_len);
     return nullptr;
   }
 
@@ -106,12 +110,14 @@ DentryCache::Node* DentryCache::lookup(Node* parent, const char* name,
     if (ptr->name_len_ == name_len &&
         strncmp(ptr->name_, name, name_len) == 0) {
       parent->childs_ = ptr;
-      DEBUG("Looking up %s,%d: Found", name, name_len);
+      DEBUG("Looking up %s,%d: Found", std::string(name, name_len).c_str(),
+            name_len);
       return ptr;
     }
     ptr = ptr->next_;
   } while (ptr != parent->childs_);
-  DEBUG("Looking up %s,%d: Not found", name, name_len);
+  DEBUG("Looking up %s,%d: Not found", std::string(name, name_len).c_str(),
+        name_len);
   return nullptr;
 }
 

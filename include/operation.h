@@ -211,6 +211,8 @@ int fuse_read(const char* path, char* buf, size_t size, off_t offset, fuse_file_
 
 int fuse_open(const char* path, fuse_file_info* fi);
 
+int fuse_create(const char* path, mode_t mode, struct fuse_file_info* fi);
+
 }  // namespace naivefs
 
 #endif

@@ -55,7 +55,7 @@ void test_bitmap() {
 }
 
 void test_path() {
-  naivefs::Path path("/A/SasdfB/C/D/E/");
+  naivefs::Path path("/home/test.txt");
   for (auto name : path) {
     std::cout << std::string(name.first, name.second) << std::endl;
   }
@@ -79,9 +79,7 @@ void test_dentry_cache() {
 int main(int argc, char *argv[]) {
   logging_open("test.log");
   INFO("log begin");
-
-  test_dentry_cache();
-
+  test_path();
   int ret;
   fuse_args args = FUSE_ARGS_INIT(argc, argv);
   if (fuse_opt_parse(&args, &global_options, option_spec, NULL) == -1) return 1;

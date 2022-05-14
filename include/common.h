@@ -23,15 +23,15 @@ namespace naivefs {
 
 // File System Configs
 #define BLOCK_SIZE 4096   // 4KB block
-#define LOG_BLOCK_SIZE 4  // 4 * 2^10 block
-
-#define INODE_PER_BLOCK BLOCK_SIZE / sizeof(ext2_inode)
-#define NUM_INODE_TABLE_BLOCKS BLOCK_SIZE * 8 / INODE_PER_BLOCK
+#define LOG_BLOCK_SIZE 2  // 2^2 * 2^10 blocks
 
 // 1 inode bitmap, 1 block bitmap, 1024 inode table blocks, 4096 * 8 data blocks
-#define BLOCKS_PER_GROUP BLOCK_SIZE * 8
-#define INODES_PER_GROUP BLOCK_SIZE * 8
-#define TOTAL_BLOCKS_PER_GROUP BLOCKS_PER_GROUP + NUM_INODE_TABLE_BLOCKS + 2
+#define BLOCKS_PER_GROUP (BLOCK_SIZE * 8)
+#define INODES_PER_GROUP (BLOCK_SIZE * 8)
+#define INODES_PER_BLOCK (BLOCK_SIZE / sizeof(ext2_inode))
+// #define NUM_INODE_TABLE_BLOCKS INODES_PER_GROUP / INODES_PER_BLOCK
+#define NUM_INODE_TABLE_BLOCKS (INODES_PER_GROUP / INODES_PER_BLOCK)
+#define TOTAL_BLOCKS_PER_GROUP (BLOCKS_PER_GROUP + NUM_INODE_TABLE_BLOCKS + 2)
 
 #define ROOT_INODE 0
 
@@ -60,11 +60,11 @@ enum FSState { UNINIT = 0x0, NORMAL = 0x1 };
 
 // direct and indirect blocks
 
-#define NUM_INDIRECT_BLOCKS BLOCK_SIZE / sizeof(uint32_t)
+#define NUM_INDIRECT_BLOCKS (BLOCK_SIZE / sizeof(uint32_t))
 #define MAX_DIR_BLOCKS EXT2_NDIR_BLOCKS
 #define MAX_IND_BLOCKS NUM_INDIRECT_BLOCKS
-#define MAX_DIND_BLOCKS MAX_IND_BLOCKS* NUM_INDIRECT_BLOCKS
-#define MAX_TIND_BLOCKS MAX_DIND_BLOCKS* NUM_INDIRECT_BLOCKS
+#define MAX_DIND_BLOCKS (MAX_IND_BLOCKS * NUM_INDIRECT_BLOCKS)
+#define MAX_TIND_BLOCKS (MAX_DIND_BLOCKS * NUM_INDIRECT_BLOCKS)
 }  // namespace naivefs
 
 #endif

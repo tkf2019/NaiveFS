@@ -104,8 +104,8 @@ bool BlockGroup::get_inode(uint32_t index, ext2_inode** inode) {
     WARNING("Inode has not been allocated in the bitmap!");
     return false;
   }
-  uint32_t block_index = index / INODE_PER_BLOCK;
-  uint32_t block_inner_index = index % INODE_PER_BLOCK;
+  uint32_t block_index = index / INODES_PER_BLOCK;
+  uint32_t block_inner_index = index % INODES_PER_BLOCK;
 
   // lazy read
   if (inode_table_.find(block_index) == inode_table_.end()) {
@@ -146,7 +146,11 @@ bool BlockGroup::alloc_block(Block** block, uint32_t* index) {
   desc_->bg_free_blocks_count--;
 
   if (index != nullptr) *index = ret;
-  return get_block(ret, block);
+  if (get_block(ret, block)) {
+    memset((*block)->get(), 0, BLOCK_SIZE);
+    return true;
+  }
+  return false;
 }
 
 off_t BlockGroup::inode_block_offset(uint32_t inode_block_index) {

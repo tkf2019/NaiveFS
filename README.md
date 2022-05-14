@@ -17,7 +17,7 @@ Naive file system based on fuse.
     - node ID: an unsigned 64-bit integer
 - FUSE request types:
   - Special：
-    - [ ] `INIT`： user space and kernel negotiate: 1. the protocol version they will operate on; 2. the set of mutually supported capabilities; 3. various parametter settings.
+    - [x] `INIT`： user space and kernel negotiate: 1. the protocol version they will operate on; 2. the set of mutually supported capabilities; 3. various parametter settings.
     - [ ] `DESTROY`： the daemon is expected to perform all necessary cleanups. No more requests will come from the kernel for this session and subsequent reads from /dev/fuse will return 0.
     - [ ] `INTERRUPT`： emitted by kernel if any previously sent requests are no longer needed (e.g., blocked READ is terminated)
   - Metadata:

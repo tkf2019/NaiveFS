@@ -35,16 +35,10 @@ static void inode_init(ext2_inode* inode) {
  * Display inner data of the inode
  */
 static void inode_display(ext2_inode* inode) {
-  // timeval time;
-  // gettimeofday(&time, NULL);
-  // if (time.tv_sec >= inode->i_dtime) {
-  //   WARNING("Inode has been DELETED!");
-  //   return;
-  // }
-  INFO("INODE CREATE TIME: %i", inode->i_ctime);
-  INFO("INODE MODIFIED TIME: %i", inode->i_mtime);
-  INFO("INODE ACCESS TIME: %i", inode->i_atime);
-  INFO("INODE NUM BLOCKS: %i", inode->i_blocks);
+  INFO("INODE CREATE TIME: %u", inode->i_ctime);
+  INFO("INODE MODIFIED TIME: %u", inode->i_mtime);
+  INFO("INODE ACCESS TIME: %u", inode->i_atime);
+  INFO("INODE NUM BLOCKS: %u", inode->i_blocks);
   if (S_ISDIR(inode->i_mode)) {
     INFO("INODE TYPE: directory");
   } else if (S_ISREG(inode->i_mode)) {
@@ -70,7 +64,8 @@ FileSystem::FileSystem()
     ASSERT(block_groups_[0]->alloc_inode(&root_inode_, nullptr, true));
     inode_init(root_inode_);
     // root directory: cannot be written or executed
-    root_inode_->i_mode = EXT2_S_IFDIR | EXT2_S_IRUSR | EXT2_S_IRGRP | EXT2_S_IROTH;
+    root_inode_->i_mode =
+        EXT2_S_IFDIR | EXT2_S_IRUSR | EXT2_S_IRGRP | EXT2_S_IROTH;
   } else {
     inode_display(root_inode_);
   }
@@ -126,22 +121,30 @@ bool FileSystem::inode_create(const Path& path, ext2_inode** inode, bool dir) {
   block_cache_->modify(last_block_index);
   // We cannot put the new dentry into cache because we do not know the
   // parent. We add the dentry into cache after next lookup.
-
   delete dentry_block;
   return true;
 }
 
-bool FileSystem::inode_lookup(const Path& path, ext2_inode** inode, uint32_t* inode_index) {
+bool FileSystem::inode_lookup(const Path& path, ext2_inode** inode,
+                              uint32_t* inode_index) {
+  *inode = root_inode_;
   if (path.empty()) {
-    *inode = root_inode_;
     return true;
   }
   DentryCache::Node* link = nullptr;
   size_t curr_index = 0;
+  bool cache_hit = false;
+  int64_t result = -1;
   for (const auto& elem : path) {
     auto node = dentry_cache_->lookup(link, elem.first, elem.second);
     if (node == nullptr) {
-      int64_t result = -1;
+      // get inode data if cache hits
+      if (curr_index > 0 && cache_hit) {
+        if (!get_inode(link->inode_, inode)) {
+          WARNING("INODE should exist with a valid directory entry!");
+          return false;
+        }
+      }
       visit_inode_blocks(
           *inode, [this, elem, &result, &inode](uint32_t index, Block* block) {
             DentryBlock dentry_block(block);
@@ -159,15 +162,17 @@ bool FileSystem::inode_lookup(const Path& path, ext2_inode** inode, uint32_t* in
             }
             return false;
           });
-      *inode_index = result;
       if (result == -1) {
         *inode = nullptr;
         return false;
       }
       // update dentry cache
+      cache_hit = false;
       link = dentry_cache_->insert(link, elem.first, elem.second, result);
     } else {
+      cache_hit = true;
       link = node;
+      result = link->inode_;
       if (curr_index == path.size() - 1) {
         if (!get_inode(link->inode_, inode)) {
           WARNING("INODE should exist with a valid directory entry!");
@@ -177,15 +182,15 @@ bool FileSystem::inode_lookup(const Path& path, ext2_inode** inode, uint32_t* in
     }
     curr_index++;
   }
+  if (inode_index != nullptr) *inode_index = result;
   return true;
 }
 
 void FileSystem::visit_inode_blocks(ext2_inode* inode,
                                     const BlockVisitor& visitor) {
-  ASSERT(inode != nullptr && !S_ISDIR(inode->i_mode) &&
-         !S_ISREG(inode->i_mode));
-  uint32_t num_blocks =
-      inode->i_blocks / (2 << super_block_->get_super()->s_log_block_size);
+  ASSERT(inode != nullptr &&
+         (S_ISDIR(inode->i_mode) || S_ISREG(inode->i_mode)));
+  uint32_t num_blocks = super_block_->num_aligned_blocks(inode->i_blocks);
   if (num_blocks == 0) return;
   Block *block = nullptr, *indirect_block = nullptr;
   uint32_t curr_num = 0;
@@ -244,7 +249,7 @@ void FileSystem::visit_inode_blocks(ext2_inode* inode,
     }
   }
 visit_finished:
-  DEBUG("Finished visiting inode blocks: current index %i", curr_num);
+  DEBUG("Finished visiting inode blocks: current index %u", curr_num);
   return;
 error_occured:
   WARNING("Error occured while visiting inode blocks!");
@@ -260,7 +265,11 @@ bool FileSystem::get_inode(uint32_t index, ext2_inode** inode) {
   uint32_t block_group_index = index / super_block_->inodes_per_group();
   auto iter = block_groups_.find(block_group_index);
   if (iter == block_groups_.end()) {
-    iter = block_groups_.insert({block_group_index, new BlockGroup(super_block_->get_group_desc(block_group_index))}).first;
+    iter = block_groups_
+               .insert({block_group_index,
+                        new BlockGroup(
+                            super_block_->get_group_desc(block_group_index))})
+               .first;
   }
   uint32_t inner_index = index % super_block_->inodes_per_group();
   if (!iter->second->get_inode(inner_index, inode)) {
@@ -282,7 +291,11 @@ bool FileSystem::get_block(uint32_t index, Block** block) {
     uint32_t block_group_index = index / super_block_->blocks_per_group();
     auto iter = block_groups_.find(block_group_index);
     if (iter == block_groups_.end()) {
-      iter = block_groups_.insert({block_group_index, new BlockGroup(super_block_->get_group_desc(block_group_index))}).first;
+      iter = block_groups_
+                 .insert({block_group_index,
+                          new BlockGroup(
+                              super_block_->get_group_desc(block_group_index))})
+                 .first;
     }
     uint32_t inner_index = index % super_block_->blocks_per_group();
     if (!iter->second->get_block(inner_index, block)) {
@@ -317,14 +330,14 @@ bool FileSystem::alloc_inode(ext2_inode** inode, uint32_t* index, bool dir) {
   if (block_groups_[block_group_index]->alloc_inode(inode, index, dir))
     goto alloc_finished;
 
-  WARNING("Allocate inode in the new block group(%i) failed",
+  WARNING("Allocate inode in the new block group(%u) failed",
           block_group_index);
   return false;
 
 alloc_finished:
   // must be converted to the index of the whole file system
   *index = block_group_index * super_block_->inodes_per_group() + *index;
-  DEBUG("Allocate new inode %i in block group %i", *index, block_group_index);
+  DEBUG("Allocate new inode %u in block group %u", *index, block_group_index);
   return true;
 }
 
@@ -350,7 +363,7 @@ bool FileSystem::alloc_block(Block** block, uint32_t* index) {
   if (block_groups_[block_group_index]->alloc_block(block, index))
     goto alloc_finished;
 
-  WARNING("Failed to allocate block in the new block group %i",
+  WARNING("Failed to allocate block in the new block group %u",
           block_group_index);
   return false;
 
@@ -359,33 +372,40 @@ alloc_finished:
   *index = block_group_index * super_block_->blocks_per_group() + *index;
   // add to block cache
   block_cache_->insert(*index, *block);
-  DEBUG("Allocate new inode %i in block group %i", *index, block_group_index);
+  DEBUG("Allocate new block %u in block group %u", *index, block_group_index);
   return true;
 }
 
 bool FileSystem::alloc_block(Block** block, uint32_t* index,
                              ext2_inode* inode) {
-  ASSERT(inode != nullptr && !S_ISDIR(inode->i_mode) &&
-         !S_ISREG(inode->i_mode));
-  uint32_t block_index;
-  uint32_t num_blocks =
-      inode->i_blocks / (2 << super_block_->get_super()->s_log_block_size);
+  ASSERT(inode != nullptr &&
+         (S_ISDIR(inode->i_mode) || S_ISREG(inode->i_mode)));
+  uint32_t block_index, indirect_block_index;
+  uint32_t num_blocks = super_block_->num_aligned_blocks(inode->i_blocks);
   Block* indirect_block = nullptr;
   if (!alloc_block(block, &block_index)) goto error_occured;
 
   if (num_blocks < MAX_DIR_BLOCKS) {
-    inode->i_blocks += 4;
+    inode->i_blocks += 2 << super_block_->get_super()->s_log_block_size;
     inode->i_block[num_blocks] = block_index;
   } else if (num_blocks < MAX_DIR_BLOCKS + MAX_IND_BLOCKS) {
-    if (!get_block(inode->i_block[EXT2_IND_BLOCK], &indirect_block))
+    if (num_blocks == MAX_DIR_BLOCKS) {
+      if (!(alloc_block(&indirect_block, &indirect_block_index)))
+        goto error_occured;
+      inode->i_block[EXT2_IND_BLOCK] = indirect_block_index;
+    } else if (!get_block(inode->i_block[EXT2_IND_BLOCK], &indirect_block))
       goto error_occured;
     uint32_t* ptr = (uint32_t*)indirect_block->get();
     *(ptr + (num_blocks - MAX_DIR_BLOCKS)) = block_index;
-    inode->i_blocks += 4;
+    inode->i_blocks += 2 << super_block_->get_super()->s_log_block_size;
     // update block cache
     block_cache_->modify(inode->i_block[EXT2_IND_BLOCK]);
   } else if (num_blocks < MAX_DIR_BLOCKS + MAX_IND_BLOCKS + MAX_DIND_BLOCKS) {
-    if (!get_block(inode->i_block[EXT2_DIND_BLOCK], &indirect_block))
+    if (num_blocks == MAX_DIR_BLOCKS + MAX_IND_BLOCKS) {
+      if (!(alloc_block(&indirect_block, &indirect_block_index)))
+        goto error_occured;
+      inode->i_block[EXT2_DIND_BLOCK] = indirect_block_index;
+    } else if (!get_block(inode->i_block[EXT2_DIND_BLOCK], &indirect_block))
       goto error_occured;
 
     uint32_t num_indirects =
@@ -401,7 +421,7 @@ bool FileSystem::alloc_block(Block** block, uint32_t* index,
         goto error_occured;
       uint32_t* ptr = (uint32_t*)double_indirect_block->get();
       *ptr = block_index;
-      inode->i_blocks += 4;
+      inode->i_blocks += 2 << super_block_->get_super()->s_log_block_size;
       // update new double indirect block
       block_cache_->modify(double_indirect_index);
     } else {
@@ -411,7 +431,7 @@ bool FileSystem::alloc_block(Block** block, uint32_t* index,
         goto error_occured;
       uint32_t* double_ptr = (uint32_t*)double_indirect_block->get();
       *(double_ptr + inner_index) = block_index;
-      inode->i_blocks += 4;
+      inode->i_blocks += 2 << super_block_->get_super()->s_log_block_size;
       // update new double indirect block
       block_cache_->modify(double_indirect_index);
     }
@@ -443,7 +463,7 @@ bool FileSystem::alloc_block_group(uint32_t* index) {
   desc->bg_used_dirs_count = 0;
   super_block_->put_group_desc(desc);
   block_groups_[*index] = new BlockGroup(desc);
-  DEBUG("Allocate new block group: %i", *index);
+  DEBUG("Allocate new block group: %u", *index);
   return true;
 }
 
