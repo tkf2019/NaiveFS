@@ -46,16 +46,19 @@ class InodeCache {
   ext2_inode* cache_;               // cache of the inode
   std::shared_mutex inode_rwlock_;  // if a file is opened by many processes, we use this to ensure atomicity.
   std::vector<FileStatus*> vec;     // when inode cache is changed in a critical section, other process must update their cache.
+  explicit InodeCache(uint32_t inode_id) : inode_id_(inode_id) { cache_ = new ext2_inode; }
+  ~InodeCache() { delete cache_; }
   void lock_shared() { inode_rwlock_.lock_shared(); }
   void unlock_shared() { inode_rwlock_.unlock_shared(); }
   void lock() { inode_rwlock_.lock(); }
   void unlock() { inode_rwlock_.unlock(); }
-  void init() { cache_ = new ext2_inode; }
   int copy() {
     ext2_inode* inode;
     if (!fs->get_inode(inode_id_, &inode)) return -EINVAL;
     memcpy(cache_, inode, sizeof(ext2_inode));
+    return 0;
   }
+  bool init() { return copy() == 0; }
   void upd_all();
 };
 
@@ -122,10 +125,7 @@ class FileStatus {
    *
    */
 
-  void init_seek() {
-    std::shared_lock<std::shared_mutex> lck_inode(inode_cache_->inode_rwlock_);
-    if (inode_cache_->cache_->i_size) bf_seek(0);
-  }
+  void init_seek() { cache_update_flag_ = true; }
 
   /**
    * @brief copy_to_buf copy the file to the buf. this function works under writer lock, because it changes file pointer. It works under reader lock
@@ -153,9 +153,9 @@ class FileStatus {
    * @param size
    * @return int
    */
-  int write(char* buf, size_t offset, size_t size, bool append_flag = false);
+  int write(const char* buf, size_t offset, size_t size, bool append_flag = false);
 
-  int append(char* buf, size_t offset, size_t size) { return write(buf, offset, size, true); }
+  int append(const char* buf, size_t offset, size_t size) { return write(buf, offset, size, true); }
 };
 
 class OpManager {
@@ -166,12 +166,23 @@ class OpManager {
    * @param inode_id
    * @return InodeCache*
    */
+  OpManager() {}
+  ~OpManager() {
+    for (auto& [_, ptr] : st_) delete ptr;
+  }
   InodeCache* get_cache(uint32_t inode_id) {
     std::unique_lock<std::shared_mutex> lck(m_);
+    INFO("OpManager get_cache inode_id: %d", inode_id);
     if (!st_.count(inode_id)) {
-      auto ic = new InodeCache;
-      ic->inode_id_ = inode_id;
-      ic->init();
+      auto ic = new InodeCache(inode_id);
+      INFO("OpManager create new cache");
+      if (!ic->init()) {
+        delete ic;
+        return nullptr;
+      }
+      if (S_ISDIR(ic->cache_->i_mode)) {
+        return ic;
+      }
       st_[inode_id] = ic;
     }
     return st_[inode_id];
@@ -209,9 +220,14 @@ void* fuse_init(fuse_conn_info* info, fuse_config* config);
 
 int fuse_read(const char* path, char* buf, size_t size, off_t offset, fuse_file_info* fi);
 
+
+int fuse_write(const char* path, const  char* buf, size_t size, off_t offset, fuse_file_info* fi);
+
 int fuse_open(const char* path, fuse_file_info* fi);
 
 int fuse_create(const char* path, mode_t mode, struct fuse_file_info* fi);
+
+int fuse_mkdir(const char* path, mode_t mode);
 
 }  // namespace naivefs
 

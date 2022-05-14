@@ -100,6 +100,7 @@ void BlockGroup::flush() {
 
 bool BlockGroup::get_inode(uint32_t index, ext2_inode** inode) {
   // invalid inode
+  INFO("inner get inode: %d", index);
   if (!inode_bitmap_->test(index)) {
     WARNING("Inode has not been allocated in the bitmap!");
     return false;

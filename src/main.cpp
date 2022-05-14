@@ -101,11 +101,12 @@ void test_filesystem() {
   }
   delete fs;
 }
+
 int main(int argc, char *argv[]) {
   logging_open("test.log");
   INFO("log begin");
 
-  test_filesystem();
+  // test_filesystem();
 
   int ret;
   fuse_args args = FUSE_ARGS_INIT(argc, argv);
@@ -116,10 +117,13 @@ int main(int argc, char *argv[]) {
     args.argv[0][0] = '\0';
   }
   ops.init = naivefs::fuse_init;
+  ops.create = naivefs::fuse_create;
   ops.getattr = naivefs::fuse_getattr;
   ops.readdir = naivefs::fuse_readdir;
   ops.open = naivefs::fuse_open;
   ops.read = naivefs::fuse_read;
+  ops.write = naivefs::fuse_write;
+  ops.mkdir = naivefs::fuse_mkdir;
   ret = fuse_main(args.argc, args.argv, &ops, NULL);
   fuse_opt_free_args(&args);
   return ret;

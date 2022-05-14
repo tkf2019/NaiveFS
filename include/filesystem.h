@@ -24,7 +24,12 @@ class FileSystem {
 
   void flush();
 
-  bool inode_create(const Path& path, ext2_inode** inode, bool dir);
+  bool inode_create(const Path& path, ext2_inode** inode, uint32_t* inode_index_result, bool dir);
+
+  bool inode_create(const Path& path, ext2_inode** inode, bool dir) {
+    uint32_t _;
+    inode_create(path, inode, &_, dir);
+  }
 
   /**
    * @brief Lookup inode by given path
@@ -33,8 +38,7 @@ class FileSystem {
    * @return false if inode does not exist or directory in the path has been
    * deleted
    */
-  bool inode_lookup(const Path& path, ext2_inode** inode,
-                    uint32_t* inode_index);
+  bool inode_lookup(const Path& path, ext2_inode** inode, uint32_t* inode_index);
 
   bool inode_lookup(const Path& path, ext2_inode** inode) {
     uint32_t _;
@@ -112,7 +116,7 @@ class FileSystem {
    * @return always true (we assume disk space will not be used up)
    */
   bool alloc_block_group(uint32_t* index);
-  
+
   /**
    * @brief free blocks
    *

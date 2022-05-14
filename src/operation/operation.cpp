@@ -102,13 +102,13 @@ int FileStatus::bf_seek(uint32_t new_block_id_in_file) {
     block_id_ = inode_cache_->cache_->i_block[block_id_in_file_];
   } else if (block_id_in_file_ <= IBLOCK_12) {
     // The first indirect block
-    uint32_t first_id = block_id_ - IBLOCK_11 - 1;
+    uint32_t first_id = block_id_in_file_ - IBLOCK_11 - 1;
     indirect_block_[0] = IndirectBlockPtr(inode_cache_->cache_->i_block[12]);
     if (!indirect_block_[0].seek(first_id, block_id_)) return -EINVAL;
   } else if (block_id_in_file_ <= IBLOCK_13) {
     // The double indirect block
-    uint32_t first_id = (block_id_ - IBLOCK_12 - 1) / (BLOCK_SIZE / 4);
-    uint32_t second_id = (block_id_ - IBLOCK_12 - 1) % (BLOCK_SIZE / 4);
+    uint32_t first_id = (block_id_in_file_ - IBLOCK_12 - 1) / (BLOCK_SIZE / 4);
+    uint32_t second_id = (block_id_in_file_ - IBLOCK_12 - 1) % (BLOCK_SIZE / 4);
     indirect_block_[0] = IndirectBlockPtr(inode_cache_->cache_->i_block[13]);
     if (!indirect_block_[0].seek(first_id, indirect_block_[1].id_)) return -EINVAL;
     if (!indirect_block_[1].seek(second_id, block_id_)) return -EINVAL;
@@ -141,7 +141,7 @@ int FileStatus::copy_to_buf(char* buf, size_t offset, size_t size) {
   size_t ret = 0;
   size_t csz = std::min(size, BLOCK_SIZE - (size_t)offset % BLOCK_SIZE);
   memcpy(buf, blk->get() + offset % BLOCK_SIZE, csz);
-  ret += csz, size -= csz, offset += csz;
+  ret += csz, size -= csz, offset += csz, buf += csz;
   while (size) {
     if (offset >= isize) return ret;
     _err_ret = next_block();
@@ -149,16 +149,16 @@ int FileStatus::copy_to_buf(char* buf, size_t offset, size_t size) {
     if (!fs->get_block(block_id_, &blk)) return -EINVAL;
     csz = std::min(size, std::min((size_t)isize - (size_t)offset, (size_t)BLOCK_SIZE));
     memcpy(buf, blk->get(), csz);
-    ret += csz, size -= csz, offset += csz;
+    ret += csz, size -= csz, offset += csz, buf += csz;
   }
   return ret;
 }
 
-int FileStatus::write(char* buf, size_t offset, size_t size, bool append_flag) {
+int FileStatus::write(const char* buf, size_t offset, size_t size, bool append_flag) {
   std::unique_lock<std::shared_mutex> lck(rwlock);
   inode_cache_->lock_shared();
   size_t isize = file_size();
-  if (offset >= isize) {
+  if (offset > isize) {
     inode_cache_->unlock_shared();
     return 0;
   }
@@ -168,38 +168,44 @@ int FileStatus::write(char* buf, size_t offset, size_t size, bool append_flag) {
     return _err_ret;
   }
   if (append_flag) offset = inode_cache_->cache_->i_size;
-  _err_ret = seek(offset / BLOCK_SIZE);
-  if (_err_ret) {
-    inode_cache_->unlock_shared();
-    return _err_ret;
-  }
+  INFO("Begin to write, now block: %u(%u), write offset: %llu\n", block_id_, block_id_in_file_, offset);
   if (offset + size > isize) {
     // Now we need to modify the inode.
     inode_cache_->unlock_shared();
     std::unique_lock<std::shared_mutex> inode_lck(inode_cache_->inode_rwlock_);
     isize = file_size();
-    if (offset >= isize) return 0;
-    _err_ret = seek(offset / BLOCK_SIZE);
-    if (_err_ret) return _err_ret;
+    if (offset > isize) return 0;
 
     Block* blk;
+    if (isize % BLOCK_SIZE == 0) {
+      uint32_t index;
+      if (!fs->alloc_block(&blk, &index, inode_cache_->cache_)) return 0;
+    }
+    _err_ret = seek(offset / BLOCK_SIZE);
+    if (_err_ret) return _err_ret;
+    INFO("write: seek success");
+
     if (!fs->get_block(block_id_, &blk)) return -EINVAL;
     size_t ret = 0;
     size_t csz = std::min(size, BLOCK_SIZE - (size_t)offset % BLOCK_SIZE);
-    memcpy(blk->get() + offset % BLOCK_SIZE, buf, csz);
-    ret += csz, size -= csz, offset += csz, inode_cache_->cache_->i_size += csz;
+    memcpy(blk->get() + offset % BLOCK_SIZE, buf + ret, csz);
+    ret += csz, size -= csz, offset += csz, inode_cache_->cache_->i_size = std::max((size_t)inode_cache_->cache_->i_size, (size_t)offset);
 
     while (size) {
-      if (offset >= isize) {
-        uint32_t index;
-        if (!fs->alloc_block(&blk, &index, inode_cache_->cache_)) return ret;
+      if (offset >= inode_cache_->cache_->i_size) {
+        INFO("write: need allocation");
+        uint32_t _;
+        if (!fs->alloc_block(&blk, &_, inode_cache_->cache_)) return ret;
+        if (next_block()) return -EIO;
+        if (!fs->get_block(block_id_, &blk)) return -EIO;
       } else {
-        next_block();
-        if (!fs->get_block(block_id_, &blk)) return -EINVAL;
+        INFO("write: don't need allocation");
+        if (next_block()) return -EIO;
+        if (!fs->get_block(block_id_, &blk)) return -EIO;
       }
       csz = std::min(size, (size_t)BLOCK_SIZE);
-      memcpy(blk->get(), buf, csz);
-      ret += csz, size -= csz, offset += csz, inode_cache_->cache_->i_size += csz;
+      memcpy(blk->get(), buf + ret, csz);
+      ret += csz, size -= csz, offset += csz, inode_cache_->cache_->i_size = std::max((size_t)inode_cache_->cache_->i_size, (size_t)offset);
     }
 
     inode_cache_->upd_all();
@@ -207,11 +213,17 @@ int FileStatus::write(char* buf, size_t offset, size_t size, bool append_flag) {
     return ret;
 
   } else {
+    INFO("write: overlap");
+    _err_ret = seek(offset / BLOCK_SIZE);
+    if (_err_ret) {
+      inode_cache_->unlock_shared();
+      return _err_ret;
+    }
     Block* blk;
     if (!fs->get_block(block_id_, &blk)) return -EINVAL;
     size_t ret = 0;
     size_t csz = std::min(size, BLOCK_SIZE - (size_t)offset % BLOCK_SIZE);
-    memcpy(blk->get() + offset % BLOCK_SIZE, buf, csz);
+    memcpy(blk->get() + offset % BLOCK_SIZE, buf + ret, csz);
     ret += csz, size -= csz, offset += csz;
     while (size) {
       if (offset >= isize) return ret;
@@ -222,7 +234,7 @@ int FileStatus::write(char* buf, size_t offset, size_t size, bool append_flag) {
       }
       if (!fs->get_block(block_id_, &blk)) return -EINVAL;
       csz = std::min(size, (size_t)BLOCK_SIZE);
-      memcpy(blk->get(), buf, csz);
+      memcpy(blk->get(), buf + ret, csz);
       ret += csz, size -= csz, offset += csz;
     }
     inode_cache_->unlock_shared();
@@ -236,6 +248,5 @@ void InodeCache::upd_all() {
 }
 
 FileStatus* _fuse_trans_info(struct fuse_file_info* fi) { return reinterpret_cast<FileStatus*>(fi->fh); }
-
 
 }  // namespace naivefs

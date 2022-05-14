@@ -71,6 +71,7 @@ FileSystem::FileSystem()
   }
 
   block_groups_[0]->flush();
+  DEBUG("File system has been initialized");
 }
 
 FileSystem::~FileSystem() {
@@ -96,8 +97,9 @@ void FileSystem::flush() {
   block_cache_->flush();
 }
 
-bool FileSystem::inode_create(const Path& path, ext2_inode** inode, bool dir) {
+bool FileSystem::inode_create(const Path& path, ext2_inode** inode, uint32_t* inode_index_result, bool dir) {
   ext2_inode* parent;
+  if (!inode_index_result) return false;
   if (!inode_lookup(Path(path, path.size() - 1), &parent)) {
     WARNING("Directory does not exist!");
     return false;
@@ -128,6 +130,7 @@ bool FileSystem::inode_create(const Path& path, ext2_inode** inode, bool dir) {
       });
   if (name_exists) {
     WARNING("Create a duplicated inode: %u", inode_index);
+    *inode_index_result = inode_index;
     if (!get_inode(inode_index, inode)) return false;
     return true;
   }
@@ -159,6 +162,7 @@ bool FileSystem::inode_create(const Path& path, ext2_inode** inode, bool dir) {
 
   DEBUG("Create inode: %i,%s", inode_index,
         std::string(path.get(path.size() - 1).first).c_str());
+  *inode_index_result = inode_index;
   return true;
 }
 
@@ -166,6 +170,7 @@ bool FileSystem::inode_lookup(const Path& path, ext2_inode** inode,
                               uint32_t* inode_index) {
   *inode = root_inode_;
   if (path.empty()) {
+    *inode_index = -1;
     return true;
   }
   DentryCache::Node* link = nullptr;
@@ -294,6 +299,11 @@ error_occured:
 }
 
 bool FileSystem::get_inode(uint32_t index, ext2_inode** inode) {
+  INFO("get inode: %d", index);
+  if (index == -1) {
+    *inode = root_inode_;
+    return true;
+  }
   if (index >= super_block_->get_super()->s_inodes_count) {
     WARNING("Inode index exceeds inodes count");
     return false;
@@ -313,6 +323,7 @@ bool FileSystem::get_inode(uint32_t index, ext2_inode** inode) {
     WARNING("Inode has not been allocated in the target block group");
     return false;
   }
+  INFO("get inode: %d, return true", index);
   return true;
 }
 
