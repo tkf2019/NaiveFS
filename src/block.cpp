@@ -57,16 +57,16 @@ void SuperBlock::init_super_block() {
 }
 
 int64_t BitmapBlock::alloc_new() {
-  int64_t i = bitmap_.find(BLOCK_SIZE * sizeof(uint8_t));
+  int64_t i = bitmap_.find(BLOCK_SIZE * 8);
   if (i < 0) {
-    ERR("Failed to alloc new item");
+    WARNING("Failed to alloc new item");
     return i;
   }
   bitmap_.set(i);
   return i;
 }
 
-BlockGroup::BlockGroup(ext2_group_desc* desc) : desc_(desc) {
+BlockGroup::BlockGroup(ext2_group_desc* desc, bool alloc) : desc_(desc) {
   ASSERT(desc != nullptr);
 
   INFO("BLOCK BITMAP OFFSET: 0x%x", desc->bg_block_bitmap);
@@ -75,8 +75,8 @@ BlockGroup::BlockGroup(ext2_group_desc* desc) : desc_(desc) {
   INFO("FREE BLOCKS COUNT: %i", desc->bg_free_blocks_count);
   INFO("FREE INODES COUNT: %i", desc->bg_free_inodes_count);
 
-  block_bitmap_ = new BitmapBlock(desc->bg_block_bitmap);
-  inode_bitmap_ = new BitmapBlock(desc->bg_inode_bitmap);
+  block_bitmap_ = new BitmapBlock(desc->bg_block_bitmap, alloc);
+  inode_bitmap_ = new BitmapBlock(desc->bg_inode_bitmap, alloc);
 }
 
 BlockGroup::~BlockGroup() {

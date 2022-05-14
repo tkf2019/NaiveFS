@@ -74,8 +74,6 @@ FileSystem::FileSystem()
 }
 
 FileSystem::~FileSystem() {
-  delete root_inode_;
-
   super_block_->flush();
   delete super_block_;
 
@@ -158,6 +156,9 @@ bool FileSystem::inode_create(const Path& path, ext2_inode** inode, bool dir) {
   // We cannot put the new dentry into cache because we do not know the
   // parent. We add the dentry into cache after next lookup.
   delete dentry_block;
+
+  DEBUG("Create inode: %i,%s", inode_index,
+        std::string(path.get(path.size() - 1).first).c_str());
   return true;
 }
 
@@ -237,16 +238,16 @@ void FileSystem::visit_inode_blocks(ext2_inode* inode,
       if (visitor(inode->i_block[i], block)) goto visit_finished;
       if (++curr_num == num_blocks) goto visit_finished;
     } else if (i == EXT2_IND_BLOCK) {
-      if (!get_block(inode->i_block[i], &block)) goto error_occured;
-      ASSERT(num_blocks - curr_num == MAX_DIR_BLOCKS);
+      if (!get_block(inode->i_block[i], &indirect_block)) goto error_occured;
+      ASSERT(curr_num == MAX_DIR_BLOCKS);
 
-      uint32_t* ptr = (uint32_t*)block->get();
+      uint32_t* ptr = (uint32_t*)indirect_block->get();
       uint32_t* end = ptr + NUM_INDIRECT_BLOCKS;
 
       while (curr_num < num_blocks && ptr != end) {
         uint32_t indirect_index = *ptr;
-        if (!get_block(indirect_index, &indirect_block)) goto error_occured;
-        if (visitor(indirect_index, indirect_block)) goto visit_finished;
+        if (!get_block(indirect_index, &block)) goto error_occured;
+        if (visitor(indirect_index, block)) goto visit_finished;
         ptr++;
         curr_num++;
       }
@@ -254,7 +255,7 @@ void FileSystem::visit_inode_blocks(ext2_inode* inode,
       if (curr_num == num_blocks) goto visit_finished;
     } else if (i == EXT2_DIND_BLOCK) {
       if (!get_block(inode->i_block[i], &block)) goto error_occured;
-      ASSERT(num_blocks - curr_num == MAX_DIR_BLOCKS + MAX_IND_BLOCKS);
+      ASSERT(curr_num == MAX_DIR_BLOCKS + MAX_IND_BLOCKS);
 
       uint32_t* ptr = (uint32_t*)block->get();
       uint32_t* end = ptr + NUM_INDIRECT_BLOCKS;
@@ -285,7 +286,7 @@ void FileSystem::visit_inode_blocks(ext2_inode* inode,
     }
   }
 visit_finished:
-  DEBUG("Finished visiting inode blocks: current index %u", curr_num);
+  DEBUG("Finished visiting %u inode blocks", curr_num);
   return;
 error_occured:
   WARNING("Error occured while visiting inode blocks!");
@@ -426,11 +427,12 @@ bool FileSystem::alloc_block(Block** block, uint32_t* index,
     inode->i_block[num_blocks] = block_index;
   } else if (num_blocks < MAX_DIR_BLOCKS + MAX_IND_BLOCKS) {
     if (num_blocks == MAX_DIR_BLOCKS) {
-      if (!(alloc_block(&indirect_block, &indirect_block_index)))
+      if (!alloc_block(&indirect_block, &indirect_block_index))
         goto error_occured;
       inode->i_block[EXT2_IND_BLOCK] = indirect_block_index;
     } else if (!get_block(inode->i_block[EXT2_IND_BLOCK], &indirect_block))
       goto error_occured;
+
     uint32_t* ptr = (uint32_t*)indirect_block->get();
     *(ptr + (num_blocks - MAX_DIR_BLOCKS)) = block_index;
     inode->i_blocks += 2 << super_block_->get_super()->s_log_block_size;
@@ -491,14 +493,14 @@ bool FileSystem::alloc_block_group(uint32_t* index) {
   ext2_group_desc* desc =
       (ext2_group_desc*)(super_block_->get() + sizeof(ext2_super_block) +
                          *index * sizeof(ext2_group_desc));
-  desc->bg_inode_bitmap = BLOCK_SIZE;
+  desc->bg_inode_bitmap = *index * MAX_BLOCK_GROUP_SIZE + BLOCK_SIZE;
   desc->bg_block_bitmap = desc->bg_inode_bitmap + BLOCK_SIZE;
   desc->bg_inode_table = desc->bg_block_bitmap + BLOCK_SIZE;
   desc->bg_free_blocks_count = BLOCKS_PER_GROUP;
   desc->bg_free_inodes_count = INODES_PER_GROUP;
   desc->bg_used_dirs_count = 0;
   super_block_->put_group_desc(desc);
-  block_groups_[*index] = new BlockGroup(desc);
+  block_groups_[*index] = new BlockGroup(desc, true);
   DEBUG("Allocate new block group: %u", *index);
   return true;
 }

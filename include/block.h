@@ -136,7 +136,8 @@ class SuperBlock : public Block {
 
 class BitmapBlock : public Block {
  public:
-  BitmapBlock(off_t offset) : Block(offset), bitmap_(data_) {}
+  BitmapBlock(off_t offset, bool alloc = false)
+      : Block(offset, alloc), bitmap_(data_) {}
 
   int64_t alloc_new();
 
@@ -183,10 +184,15 @@ class DentryBlock {
         break;
       }
       dentries_.push_back(dentry);
-      data += dentry->rec_len;
       size_ += dentry->rec_len;
+      if (size_ + sizeof(ext2_dir_entry_2) > BLOCK_SIZE) {
+        // Avoid pointer reaching the undefined area
+        break;
+      }
+      data += dentry->rec_len;
       dentry = (ext2_dir_entry_2*)data;
     }
+    DEBUG("DentryBlocks Size: %u", size_);
   }
 
   std::vector<ext2_dir_entry_2*>* get() { return &dentries_; }
@@ -213,7 +219,7 @@ class DentryBlock {
 
 class BlockGroup {
  public:
-  BlockGroup(ext2_group_desc* desc);
+  BlockGroup(ext2_group_desc* desc, bool alloc = false);
 
   ~BlockGroup();
 
