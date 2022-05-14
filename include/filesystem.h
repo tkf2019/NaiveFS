@@ -112,13 +112,7 @@ class FileSystem {
    * @return always true (we assume disk space will not be used up)
    */
   bool alloc_block_group(uint32_t* index);
-
-  /**
-   * Seek to the last block of the inode. Returns NULL if no block has been
-   * allocated.
-   */
-  bool seek_last_block(ext2_inode* inode, Block** block, uint32_t* index);
-
+  
   /**
    * @brief free blocks
    *

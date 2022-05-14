@@ -505,21 +505,4 @@ bool FileSystem::alloc_block_group(uint32_t* index) {
   return true;
 }
 
-bool FileSystem::seek_last_block(ext2_inode* inode, Block** block,
-                                 uint32_t* index) {
-  if (inode == nullptr) return false;
-  Block* last_block = nullptr;
-  uint32_t last_index;
-  // TODO: it can be faster (skip blocks)
-  visit_inode_blocks(inode,
-                     [&last_block, &last_index](uint32_t index, Block* block) {
-                       last_block = block;
-                       last_index = index;
-                       return false;
-                     });
-  *block = last_block;
-  *index = last_index;
-  return true;
-}
-
 }  // namespace naivefs
