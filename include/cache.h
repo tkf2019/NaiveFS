@@ -27,6 +27,8 @@ class BlockCache {
 
   ~BlockCache();
 
+  void flush();
+
   void insert(uint32_t index, Block* block);
 
   Block* get(uint32_t index);

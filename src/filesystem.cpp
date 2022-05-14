@@ -88,6 +88,16 @@ FileSystem::~FileSystem() {
   delete dentry_cache_;
 }
 
+void FileSystem::flush() {
+  super_block_->flush();
+
+  for (auto bg : block_groups_) {
+    bg.second->flush();
+  }
+
+  block_cache_->flush();
+}
+
 bool FileSystem::inode_create(const Path& path, ext2_inode** inode, bool dir) {
   ext2_inode* parent;
   if (!inode_lookup(Path(path, path.size() - 1), &parent)) {
@@ -95,21 +105,47 @@ bool FileSystem::inode_create(const Path& path, ext2_inode** inode, bool dir) {
     return false;
   }
 
-  // allocate new inode
+  Block* last_block = nullptr;
+  uint32_t last_block_index;
+  auto last_item = path.get(path.size() - 1);
+
+  // Check if name already exists
   uint32_t inode_index;
+  bool name_exists = false;
+  visit_inode_blocks(
+      parent, [&inode_index, &name_exists, &last_block, &last_block_index,
+               last_item](uint32_t index, Block* block) {
+        DentryBlock dentry_block(block);
+        for (auto dentry : *dentry_block.get()) {
+          if (dentry->name_len != last_item.second) continue;
+          if (memcmp(last_item.first, dentry->name, dentry->name_len)) continue;
+          // find a matched directory entry
+          name_exists = true;
+          inode_index = dentry->inode;
+        }
+
+        last_block = block;
+        last_block_index = index;
+        return false;
+      });
+  if (name_exists) {
+    WARNING("Create a duplicated inode: %u", inode_index);
+    if (!get_inode(inode_index, inode)) return false;
+    return true;
+  }
+
+  // allocate new inode
   if (!alloc_inode(inode, &inode_index, dir)) return false;
 
-  // update parent dentry block
-  Block* last_block;
-  uint32_t last_block_index;
-  ASSERT(seek_last_block(parent, &last_block, &last_block_index));
+  // get parent last dentry block
   if (last_block == nullptr) {
     if (!alloc_block(&last_block, &last_block_index, parent)) {
       return false;
     }
   }
   DentryBlock* dentry_block = new DentryBlock(last_block);
-  auto last_item = path.get(path.size() - 1);
+
+  // update dentry block
   if (dentry_block->size() + sizeof(ext2_dir_entry_2) + last_item.second >
       BLOCK_SIZE) {
     if (!alloc_block(&last_block, &last_block_index, parent)) return false;

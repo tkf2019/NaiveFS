@@ -18,8 +18,17 @@ BlockCache::~BlockCache() {
   delete[] entries_;
 }
 
+void BlockCache::flush() {
+  for (auto& node : map_) {
+    if (node.second->dirty_) {
+      node.second->block_->flush();
+      node.second->dirty_ = false;
+    }
+  }
+}
+
 void BlockCache::insert(uint32_t index, Block* block) {
-  DEBUG("Inserting %u to block cache", index);
+  DEBUG("[BlockCache] Inserting %u", index);
   Node* node = nullptr;
   if (map_.find(index) == map_.end()) {
     if (free_entries_.empty()) {
@@ -44,7 +53,7 @@ void BlockCache::insert(uint32_t index, Block* block) {
 }
 
 Block* BlockCache::get(uint32_t index) {
-  DEBUG("Getting %u from block cache", index);
+  DEBUG("[BlockCache] Getting %u", index);
   Node* node = nullptr;
   if (map_.find(index) == map_.end()) {
     return nullptr;
@@ -74,7 +83,7 @@ DentryCache::~DentryCache() {
 
 DentryCache::Node* DentryCache::insert(Node* parent, const char* name,
                                        size_t name_len, uint32_t inode) {
-  DEBUG("Inserting %s,%d to dentry cache", std::string(name, name_len).c_str(),
+  DEBUG("[DentryCache] Inserting %s,%d", std::string(name, name_len).c_str(),
         name_len);
 
   if (parent == nullptr) parent = root_;
@@ -100,7 +109,7 @@ DentryCache::Node* DentryCache::lookup(Node* parent, const char* name,
   if (parent == nullptr) parent = root_;
 
   if (parent->childs_ == nullptr) {
-    DEBUG("Looking up %s,%d: Not found (no childs)",
+    DEBUG("[DentryCache] Looking up %s,%d: Not found (no childs)",
           std::string(name, name_len).c_str(), name_len);
     return nullptr;
   }
@@ -110,14 +119,14 @@ DentryCache::Node* DentryCache::lookup(Node* parent, const char* name,
     if (ptr->name_len_ == name_len &&
         strncmp(ptr->name_, name, name_len) == 0) {
       parent->childs_ = ptr;
-      DEBUG("Looking up %s,%d: Found", std::string(name, name_len).c_str(),
-            name_len);
+      DEBUG("[DentryCache] Looking up %s,%d: Found",
+            std::string(name, name_len).c_str(), name_len);
       return ptr;
     }
     ptr = ptr->next_;
   } while (ptr != parent->childs_);
-  DEBUG("Looking up %s,%d: Not found", std::string(name, name_len).c_str(),
-        name_len);
+  DEBUG("[DentryCache] Looking up %s,%d: Not found",
+        std::string(name, name_len).c_str(), name_len);
   return nullptr;
 }
 

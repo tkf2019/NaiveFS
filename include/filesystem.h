@@ -22,6 +22,8 @@ class FileSystem {
 
   inline ext2_super_block* super() { return super_block_->get_super(); }
 
+  void flush();
+
   bool inode_create(const Path& path, ext2_inode** inode, bool dir);
 
   /**
@@ -31,7 +33,8 @@ class FileSystem {
    * @return false if inode does not exist or directory in the path has been
    * deleted
    */
-  bool inode_lookup(const Path& path, ext2_inode** inode, uint32_t* inode_index);
+  bool inode_lookup(const Path& path, ext2_inode** inode,
+                    uint32_t* inode_index);
 
   bool inode_lookup(const Path& path, ext2_inode** inode) {
     uint32_t _;
@@ -118,8 +121,8 @@ class FileSystem {
 
   /**
    * @brief free blocks
-   * 
-   * 
+   *
+   *
    */
   bool free_block(Block* block) { return true; }
 
