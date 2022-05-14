@@ -31,10 +31,14 @@ class Block {
  public:
   Block() : offset_(0), data_(nullptr) {}
 
-  Block(off_t offset) : offset_(offset) {
+  Block(off_t offset, bool alloc = false) : offset_(offset) {
     data_ = (uint8_t*)alloc_aligned(BLOCK_SIZE);
-    int ret = disk_read(offset_, BLOCK_SIZE, data_);
-    ASSERT(ret == 0);
+    if (!alloc) {
+      int ret = disk_read(offset_, BLOCK_SIZE, data_);
+      ASSERT(ret == 0);
+    } else {
+      memset(data_, 0, BLOCK_SIZE);
+    }
   }
 
   ~Block() {

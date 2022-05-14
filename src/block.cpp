@@ -146,11 +146,8 @@ bool BlockGroup::alloc_block(Block** block, uint32_t* index) {
   desc_->bg_free_blocks_count--;
 
   if (index != nullptr) *index = ret;
-  if (get_block(ret, block)) {
-    memset((*block)->get(), 0, BLOCK_SIZE);
-    return true;
-  }
-  return false;
+  *block = new Block(data_block_offset(ret), true);
+  return true;
 }
 
 off_t BlockGroup::inode_block_offset(uint32_t inode_block_index) {
