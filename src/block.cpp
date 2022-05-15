@@ -136,7 +136,9 @@ bool BlockGroup::alloc_inode(ext2_inode** inode, uint32_t* index, bool dir) {
   if (dir) desc_->bg_used_dirs_count++;
 
   if (index != nullptr) *index = ret;
-  return get_inode(ret, inode);
+  ret = get_inode(ret, inode);
+  if (dir) (*inode)->i_mode = S_IFDIR;
+  return ret;
 }
 
 bool BlockGroup::alloc_block(Block** block, uint32_t* index) {

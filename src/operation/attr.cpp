@@ -10,7 +10,7 @@ int fuse_getattr(const char *path, struct stat *stbuf,
   uint32_t inode_id;
 
   // we assume inode_lookup is thread-safe
-  if (!fs->inode_lookup(path, &inode, &inode_id)) return -ENOENT;
+  if (fs->inode_lookup(path, &inode, &inode_id)) return -ENOENT;
   auto ic = opm->get_cache(inode_id);
 
   // can't get inode

@@ -11,7 +11,7 @@ int fuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offs
 
   ext2_inode *parent;
   uint32_t inode_id;
-  if (!fs->inode_lookup(path, &parent, &inode_id)) return -ENOENT;
+  if (fs->inode_lookup(path, &parent, &inode_id)) return -ENOENT;
 
   if (!S_ISDIR(parent->i_mode)) return -ENOTDIR;
 
@@ -33,7 +33,7 @@ int fuse_mkdir(const char* path, mode_t mode) {
   INFO("MKDIR: %s", path);
   mode |= S_IFDIR;
   ext2_inode* _;
-  if(!fs->inode_create(path, &_, true)) return -EINVAL;
+  if(fs->inode_create(path, &_, true)) return -EINVAL;
   return 0;
 }
 

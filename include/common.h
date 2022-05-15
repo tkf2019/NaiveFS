@@ -66,6 +66,16 @@ enum FSState { UNINIT = 0x0, NORMAL = 0x1 };
 #define MAX_IND_BLOCKS NUM_INDIRECT_BLOCKS
 #define MAX_DIND_BLOCKS (MAX_IND_BLOCKS * NUM_INDIRECT_BLOCKS)
 #define MAX_TIND_BLOCKS (MAX_DIND_BLOCKS * NUM_INDIRECT_BLOCKS)
+
+// return code
+enum RetCode {
+  FS_SUCCESS = 0x0,  // we can use !RetCode to find an error
+  FS_NOT_FOUND,      // not found
+  FS_ALLOC_ERR,      // allocation error
+  FS_DUP_ERR,        // duplication error
+  FS_NULL_ERR,       // null pointer detected
+  FS_TYPE_ERR        // file type error
+};
 }  // namespace naivefs
 
 #endif

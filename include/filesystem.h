@@ -24,12 +24,12 @@ class FileSystem {
 
   void flush();
 
-  bool inode_create(const Path& path, ext2_inode** inode,
-                    uint32_t* inode_index_result, bool dir);
+  RetCode inode_create(const Path& path, ext2_inode** inode,
+                       uint32_t* inode_index_result, bool dir);
 
-  bool inode_create(const Path& path, ext2_inode** inode, bool dir) {
+  RetCode inode_create(const Path& path, ext2_inode** inode, bool dir) {
     uint32_t _;
-    inode_create(path, inode, &_, dir);
+    return inode_create(path, inode, &_, dir);
   }
 
   /**
@@ -39,10 +39,10 @@ class FileSystem {
    * @return false if inode does not exist or directory in the path has been
    * deleted
    */
-  bool inode_lookup(const Path& path, ext2_inode** inode,
-                    uint32_t* inode_index);
+  RetCode inode_lookup(const Path& path, ext2_inode** inode,
+                       uint32_t* inode_index);
 
-  bool inode_lookup(const Path& path, ext2_inode** inode) {
+  RetCode inode_lookup(const Path& path, ext2_inode** inode) {
     uint32_t _;
     return inode_lookup(path, inode, &_);
   }
@@ -119,7 +119,7 @@ class FileSystem {
    *
    *
    */
-  bool free_block(Block* block) { return true; }
+  bool free_block(Block* block);
 
  private:
   // Timestamp

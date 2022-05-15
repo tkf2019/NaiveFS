@@ -97,13 +97,13 @@ void FileSystem::flush() {
   block_cache_->flush();
 }
 
-bool FileSystem::inode_create(const Path& path, ext2_inode** inode,
-                              uint32_t* inode_index_result, bool dir) {
+RetCode FileSystem::inode_create(const Path& path, ext2_inode** inode,
+                                 uint32_t* inode_index_result, bool dir) {
   ext2_inode* parent;
-  if (!inode_index_result) return false;
-  if (!inode_lookup(Path(path, path.size() - 1), &parent)) {
+  if (!inode_index_result) return FS_NULL_ERR;
+  if (inode_lookup(Path(path, path.size() - 1), &parent)) {
     WARNING("Directory does not exist!");
-    return false;
+    return FS_NOT_FOUND;
   }
 
   Block* last_block = nullptr;
@@ -132,17 +132,17 @@ bool FileSystem::inode_create(const Path& path, ext2_inode** inode,
   if (name_exists) {
     WARNING("Create a duplicated inode: %u", inode_index);
     *inode_index_result = inode_index;
-    if (!get_inode(inode_index, inode)) return false;
-    return true;
+    if (!get_inode(inode_index, inode)) return FS_NOT_FOUND;
+    return FS_DUP_ERR;
   }
 
   // allocate new inode
-  if (!alloc_inode(inode, &inode_index, dir)) return false;
+  if (!alloc_inode(inode, &inode_index, dir)) return FS_ALLOC_ERR;
 
   // get parent last dentry block
   if (last_block == nullptr) {
     if (!alloc_block(&last_block, &last_block_index, parent)) {
-      return false;
+      return FS_ALLOC_ERR;
     }
   }
   DentryBlock* dentry_block = new DentryBlock(last_block);
@@ -150,7 +150,8 @@ bool FileSystem::inode_create(const Path& path, ext2_inode** inode,
   // update dentry block
   if (dentry_block->size() + sizeof(ext2_dir_entry_2) + last_item.second >
       BLOCK_SIZE) {
-    if (!alloc_block(&last_block, &last_block_index, parent)) return false;
+    if (!alloc_block(&last_block, &last_block_index, parent))
+      return FS_ALLOC_ERR;
     delete dentry_block;
     dentry_block = new DentryBlock(last_block);
   }
@@ -164,15 +165,15 @@ bool FileSystem::inode_create(const Path& path, ext2_inode** inode,
   DEBUG("Create inode: %i,%s", inode_index,
         std::string(path.get(path.size() - 1).first).c_str());
   *inode_index_result = inode_index;
-  return true;
+  return FS_SUCCESS;
 }
 
-bool FileSystem::inode_lookup(const Path& path, ext2_inode** inode,
-                              uint32_t* inode_index) {
+RetCode FileSystem::inode_lookup(const Path& path, ext2_inode** inode,
+                                 uint32_t* inode_index) {
   *inode = root_inode_;
   if (path.empty()) {
-    *inode_index = -1;
-    return true;
+    *inode_index = ROOT_INODE;
+    return FS_SUCCESS;
   }
   DentryCache::Node* link = nullptr;
   size_t curr_index = 0;
@@ -185,9 +186,13 @@ bool FileSystem::inode_lookup(const Path& path, ext2_inode** inode,
       if (curr_index > 0 && cache_hit) {
         if (!get_inode(link->inode_, inode)) {
           WARNING("INODE should exist with a valid directory entry!");
-          return false;
+          return FS_NOT_FOUND;
         }
       }
+      // final item can be a file or a directory
+      if (curr_index == path.size() - 1 && !S_ISDIR((*inode)->i_mode))
+        return FS_TYPE_ERR;
+      
       visit_inode_blocks(
           *inode, [this, elem, &result, &inode](uint32_t index, Block* block) {
             DentryBlock dentry_block(block);
@@ -207,7 +212,7 @@ bool FileSystem::inode_lookup(const Path& path, ext2_inode** inode,
           });
       if (result == -1) {
         *inode = nullptr;
-        return false;
+        return FS_NOT_FOUND;
       }
       // update dentry cache
       cache_hit = false;
@@ -219,14 +224,14 @@ bool FileSystem::inode_lookup(const Path& path, ext2_inode** inode,
       if (curr_index == path.size() - 1) {
         if (!get_inode(link->inode_, inode)) {
           WARNING("INODE should exist with a valid directory entry!");
-          return false;
+          return FS_NOT_FOUND;
         }
       }
     }
     curr_index++;
   }
   if (inode_index != nullptr) *inode_index = result;
-  return true;
+  return FS_SUCCESS;
 }
 
 bool FileSystem::visit_indirect_blocks(Block* indirect_block, uint32_t num,
@@ -256,10 +261,9 @@ void FileSystem::visit_inode_blocks(ext2_inode* inode,
   if (num_blocks == 0) return;
   Block* block = nullptr;
   Block* indirect_block = nullptr;
-  Block* double_indirect_block = nullptr;
   uint32_t curr_num = 0;
 
-  auto indirect_visitor = [this, visitor, num_blocks, &curr_num](uint32_t _,
+  auto indirect_visitor = [this, visitor, num_blocks, &curr_num](uint32_t index,
                                                                  Block* block) {
     visit_indirect_blocks(block, num_blocks - curr_num, visitor);
     curr_num += std::min(num_blocks - curr_num, (uint32_t)NUM_INDIRECT_BLOCKS);
@@ -267,7 +271,7 @@ void FileSystem::visit_inode_blocks(ext2_inode* inode,
   };
 
   auto double_indirect_visitor = [this, indirect_visitor, num_blocks,
-                                  &curr_num](uint32_t _, Block* block) {
+                                  &curr_num](uint32_t index, Block* block) {
     visit_indirect_blocks(block, num_blocks - curr_num, indirect_visitor);
     return false;
   };

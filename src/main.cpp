@@ -68,8 +68,8 @@ void test_dentry_cache() {
   auto node2 = cache->insert(nullptr, "B", 1, 2);
   cache->lookup(nullptr, "A", 1);
   auto node3 = cache->insert(node1, "C", 1, 3);
-  auto node4 = cache->insert(node3, "D", 1, 4);
-  auto node5 = cache->insert(node2, "E", 1, 5);
+  cache->insert(node3, "D", 1, 4);
+  cache->insert(node2, "E", 1, 5);
   cache->lookup(node3, "D", 1);
   cache->lookup(node3, "E", 1);
   cache->lookup(node1, "C", 1);
