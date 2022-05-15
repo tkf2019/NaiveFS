@@ -43,15 +43,22 @@ class FileSystem {
                        DentryCache::Node** cache_ptr = nullptr);
 
   /**
-   * @brief Delete an existing inode
+   * @brief Delete an existing inode. We need to release the data held by dentry
+   * cache. And we set dentry.name_len to 0 to delete the inode in the dentry
+   * block of parent inode.
    */
-  RetCode inode_delete(const Path& path, ext2_inode** inode,
-                       uint32_t* inode_index = nullptr);
+  RetCode inode_delete(const Path& path, uint32_t* inode_index = nullptr);
+
+  /**
+   * @brief Delete an existing inode by recursion
+   */
+  RetCode inode_delete(uint32_t inode_index);
 
   /**
    * @brief Visit inode blocks
    *
-   * @param visitor visiting loop will be terminated by return value of visitor
+   * @param visitor visiting loop will be terminated by return value of
+   * visitor
    */
   void visit_inode_blocks(ext2_inode* inode, const BlockVisitor& visitor);
 

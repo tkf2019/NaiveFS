@@ -88,12 +88,13 @@ void test_filesystem() {
   INFO("%d", fs->inode_create("/home/tmp", &home2_inode, true));
   ext2_inode *test3_inode;
   INFO("%d", fs->inode_create("/home/tmp/test.txt", &test3_inode, false));
+  INFO("%d", fs->inode_delete("home/tmp"));
   INFO("%d", fs->inode_lookup("/home/tmp/test.txt", &test3_inode));
   ext2_inode *d_test2_inode;
-  INFO("%d", fs->inode_delete("/home/test2.txt", &d_test2_inode));
-  ASSERT(d_test2_inode == test2_inode);
+  INFO("%d", fs->inode_delete("/home/test2.txt"));
   INFO("%d", fs->inode_lookup("/home/test2.txt", &test2_inode));
   INFO("%d", fs->inode_create("/home/test2.txt", &test2_inode, false));
+  INFO("%d", fs->inode_create("/home/tmp2", &home2_inode, true));
   // for (int i = 0; i < 4096; ++i) {
   //   ext2_inode *dir;
   //   fs->inode_create((std::string("/home/dir") +

@@ -178,8 +178,7 @@ class DentryBlock {
     uint8_t* data = block->get();
     ext2_dir_entry_2* dentry = (ext2_dir_entry_2*)data;
     while (true) {
-      if (dentry->rec_len == 0 || (!DENTRY_ISDIR(dentry->file_type) &&
-                                   !DENTRY_ISREG(dentry->file_type))) {
+      if (dentry->rec_len == 0) {
         // We ensure that directory entries are APPENDED to the data block.
         break;
       }

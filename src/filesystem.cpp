@@ -243,8 +243,7 @@ RetCode FileSystem::inode_lookup(const Path& path, ext2_inode** inode,
   return FS_SUCCESS;
 }
 
-RetCode FileSystem::inode_delete(const Path& path, ext2_inode** inode,
-                                 uint32_t* inode_index) {
+RetCode FileSystem::inode_delete(const Path& path, uint32_t* inode_index) {
   if (!path.valid()) return FS_INVALID;
   // cannot delete root inode
   if (path.empty()) return FS_INVALID;
@@ -277,19 +276,13 @@ RetCode FileSystem::inode_delete(const Path& path, ext2_inode** inode,
     return false;
   });
   if (!name_exists) return FS_NOT_FOUND;
-  if (!get_inode(matched_index, inode)) return FS_NOT_FOUND;
 
   // update block cache
   block_cache_->modify(dentry_block_index);
 
-  // release inode blocks
-  visit_inode_blocks(*inode, [this](uint32_t index, Block* block) {
-    free_block(index);
-    return false;
-  });
-
   // release inode
-  free_inode(matched_index);
+  RetCode delete_ret = inode_delete(matched_index);
+  if (delete_ret) return delete_ret;
 
   // release dentry cache node
   auto parent_item = dir_path.back();
@@ -298,6 +291,36 @@ RetCode FileSystem::inode_delete(const Path& path, ext2_inode** inode,
   dentry_cache_->remove(cache_ptr, last_item.first, last_item.second);
 
   if (inode_index != nullptr) *inode_index = matched_index;
+  DEBUG("Delete inode: %i,%s", matched_index,
+        std::string(last_item.first, last_item.second).c_str());
+  return FS_SUCCESS;
+}
+
+RetCode FileSystem::inode_delete(uint32_t index) {
+  if (index == ROOT_INODE) return FS_INVALID;
+  ext2_inode* inode;
+  if (!get_inode(index, &inode)) return FS_NOT_FOUND;
+  if (!S_ISREG(inode->i_mode) && !S_ISDIR(inode->i_mode)) return FS_TYPE_ERR;
+
+  if (S_ISDIR(inode->i_mode)) {
+    visit_inode_blocks(inode, [this](uint32_t _, Block* block) {
+      DentryBlock dentry_block(block);
+      for (auto dentry : *dentry_block.get()) {
+        // delete an existing inode
+        if (dentry->name_len != 0) {
+          inode_delete(dentry->inode);
+        }
+      }
+      return false;
+    });
+  } else {
+    visit_inode_blocks(inode, [this](uint32_t index, Block* block) {
+      free_block(index);
+      return false;
+    });
+  }
+
+  free_inode(index);
   return FS_SUCCESS;
 }
 
@@ -685,6 +708,7 @@ bool FileSystem::alloc_block_group(uint32_t* index) {
 }
 
 bool FileSystem::free_inode(uint32_t index) {
+  DEBUG("Free %i", index);
   // update super block
   super_block_->get_super()->s_free_inodes_count++;
   super_block_->get_super()->s_inodes_count--;
