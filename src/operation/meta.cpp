@@ -7,6 +7,7 @@ int fuse_create(const char* path, mode_t mode, struct fuse_file_info* fi) {
 
   ext2_inode* inode;
   uint32_t inode_id;
+  // TODO: 
   if (fs->inode_lookup(path, &inode, &inode_id)) return -EEXIST;
   if (!fs->inode_create(path, &inode, &inode_id, false)) return -EIO;
   INFO("Begin create: %s, inode_id: %d", path, inode_id);

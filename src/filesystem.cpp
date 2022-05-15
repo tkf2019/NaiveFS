@@ -97,7 +97,8 @@ void FileSystem::flush() {
   block_cache_->flush();
 }
 
-bool FileSystem::inode_create(const Path& path, ext2_inode** inode, uint32_t* inode_index_result, bool dir) {
+bool FileSystem::inode_create(const Path& path, ext2_inode** inode,
+                              uint32_t* inode_index_result, bool dir) {
   ext2_inode* parent;
   if (!inode_index_result) return false;
   if (!inode_lookup(Path(path, path.size() - 1), &parent)) {
@@ -228,14 +229,48 @@ bool FileSystem::inode_lookup(const Path& path, ext2_inode** inode,
   return true;
 }
 
+bool FileSystem::visit_indirect_blocks(Block* indirect_block, uint32_t num,
+                                       const BlockVisitor& visitor) {
+  ASSERT(indirect_block != nullptr);
+  uint32_t* ptr = (uint32_t*)indirect_block->get();
+  uint32_t* end = ptr + NUM_INDIRECT_BLOCKS;
+  uint32_t curr_num = 0;
+  Block* block = nullptr;
+
+  while (curr_num < num && ptr != end) {
+    uint32_t indirect_index = *ptr;
+    if (!get_block(indirect_index, &block)) return false;
+    if (visitor(indirect_index, block)) return true;
+    ptr++;
+    curr_num++;
+  }
+
+  return true;
+}
+
 void FileSystem::visit_inode_blocks(ext2_inode* inode,
                                     const BlockVisitor& visitor) {
   ASSERT(inode != nullptr &&
          (S_ISDIR(inode->i_mode) || S_ISREG(inode->i_mode)));
   uint32_t num_blocks = super_block_->num_aligned_blocks(inode->i_blocks);
   if (num_blocks == 0) return;
-  Block *block = nullptr, *indirect_block = nullptr;
+  Block* block = nullptr;
+  Block* indirect_block = nullptr;
+  Block* double_indirect_block = nullptr;
   uint32_t curr_num = 0;
+
+  auto indirect_visitor = [this, visitor, num_blocks, &curr_num](uint32_t _,
+                                                                 Block* block) {
+    visit_indirect_blocks(block, num_blocks - curr_num, visitor);
+    curr_num += std::min(num_blocks - curr_num, (uint32_t)NUM_INDIRECT_BLOCKS);
+    return false;
+  };
+
+  auto double_indirect_visitor = [this, indirect_visitor, num_blocks,
+                                  &curr_num](uint32_t _, Block* block) {
+    visit_indirect_blocks(block, num_blocks - curr_num, indirect_visitor);
+    return false;
+  };
 
   for (int i = 0; i < EXT2_N_BLOCKS; ++i) {
     if (i < EXT2_NDIR_BLOCKS) {
@@ -243,51 +278,32 @@ void FileSystem::visit_inode_blocks(ext2_inode* inode,
       if (visitor(inode->i_block[i], block)) goto visit_finished;
       if (++curr_num == num_blocks) goto visit_finished;
     } else if (i == EXT2_IND_BLOCK) {
-      if (!get_block(inode->i_block[i], &indirect_block)) goto error_occured;
       ASSERT(curr_num == MAX_DIR_BLOCKS);
-
-      uint32_t* ptr = (uint32_t*)indirect_block->get();
-      uint32_t* end = ptr + NUM_INDIRECT_BLOCKS;
-
-      while (curr_num < num_blocks && ptr != end) {
-        uint32_t indirect_index = *ptr;
-        if (!get_block(indirect_index, &block)) goto error_occured;
-        if (visitor(indirect_index, block)) goto visit_finished;
-        ptr++;
-        curr_num++;
-      }
-
+      if (!get_block(inode->i_block[i], &indirect_block)) goto error_occured;
+      if (!visit_indirect_blocks(indirect_block, num_blocks - curr_num,
+                                 visitor))
+        goto error_occured;
+      curr_num += std::min(num_blocks - curr_num, (uint32_t)MAX_IND_BLOCKS);
       if (curr_num == num_blocks) goto visit_finished;
     } else if (i == EXT2_DIND_BLOCK) {
-      if (!get_block(inode->i_block[i], &block)) goto error_occured;
       ASSERT(curr_num == MAX_DIR_BLOCKS + MAX_IND_BLOCKS);
-
-      uint32_t* ptr = (uint32_t*)block->get();
-      uint32_t* end = ptr + NUM_INDIRECT_BLOCKS;
-
-      while (curr_num < num_blocks && ptr != end) {
-        uint32_t indirect_index = *ptr;
-        if (!get_block(indirect_index, &indirect_block)) goto error_occured;
-
-        uint32_t* dptr = (uint32_t*)indirect_block->get();
-        uint32_t* dend = dptr + NUM_INDIRECT_BLOCKS;
-        while (curr_num < num_blocks && dptr != dend) {
-          Block* double_indirect_block;
-          uint32_t double_indirect_index = *dptr;
-          if (!get_block(double_indirect_index, &double_indirect_block))
-            goto error_occured;
-          if (visitor(double_indirect_index, double_indirect_block))
-            goto visit_finished;
-          dptr++;
-          curr_num++;
-        }
-        if (curr_num == num_blocks) goto visit_finished;
-        ptr++;
-      }
+      if (!get_block(inode->i_block[i], &indirect_block)) goto error_occured;
+      uint32_t num_indirects =
+          ((num_blocks - curr_num) + NUM_INDIRECT_BLOCKS - 1) /
+          NUM_INDIRECT_BLOCKS;
+      if (!visit_indirect_blocks(indirect_block, num_indirects,
+                                 indirect_visitor))
+        goto error_occured;
       if (curr_num == num_blocks) goto visit_finished;
     } else if (i == EXT2_TIND_BLOCK) {
-      WARNING("Not supported: Too big file!");
-      goto error_occured;
+      ASSERT(curr_num == MAX_DIR_BLOCKS + MAX_IND_BLOCKS + MAX_DIND_BLOCKS);
+      if (!get_block(inode->i_block[i], &indirect_block)) goto error_occured;
+      uint32_t num_indirects =
+          ((num_blocks - curr_num) + MAX_DIND_BLOCKS - 1) / MAX_DIND_BLOCKS;
+      if (!visit_indirect_blocks(indirect_block, num_indirects,
+                                 double_indirect_visitor))
+        goto error_occured;
+      if (curr_num == num_blocks) goto visit_finished;
     }
   }
 visit_finished:
@@ -451,42 +467,123 @@ bool FileSystem::alloc_block(Block** block, uint32_t* index,
     block_cache_->modify(inode->i_block[EXT2_IND_BLOCK]);
   } else if (num_blocks < MAX_DIR_BLOCKS + MAX_IND_BLOCKS + MAX_DIND_BLOCKS) {
     if (num_blocks == MAX_DIR_BLOCKS + MAX_IND_BLOCKS) {
-      if (!(alloc_block(&indirect_block, &indirect_block_index)))
+      if (!alloc_block(&indirect_block, &indirect_block_index))
         goto error_occured;
       inode->i_block[EXT2_DIND_BLOCK] = indirect_block_index;
     } else if (!get_block(inode->i_block[EXT2_DIND_BLOCK], &indirect_block))
       goto error_occured;
 
     uint32_t num_indirects =
-        (num_blocks - MAX_DIR_BLOCKS - MAX_IND_BLOCKS) / NUM_INDIRECT_BLOCKS;
+        (num_blocks - MAX_DIR_BLOCKS - 1) / NUM_INDIRECT_BLOCKS;
     ASSERT(num_indirects <= NUM_INDIRECT_BLOCKS);
     uint32_t inner_index =
         (num_blocks - MAX_DIR_BLOCKS - MAX_IND_BLOCKS) % NUM_INDIRECT_BLOCKS;
     uint32_t double_indirect_index;
     Block* double_indirect_block;
-    if (inner_index == 0) {
-      // double indirect blocks has been full
+
+    if (inner_index == 0) {  // double indirect blocks has been full
+      // allocate new double indirect block
       if (!alloc_block(&double_indirect_block, &double_indirect_index))
         goto error_occured;
-      uint32_t* ptr = (uint32_t*)double_indirect_block->get();
-      *ptr = block_index;
-      inode->i_blocks += 2 << super_block_->get_super()->s_log_block_size;
+
+      // update indirect block
+      uint32_t* ptr = (uint32_t*)indirect_block->get();
+      *(ptr + num_indirects) = double_indirect_index;
+      block_cache_->modify(inode->i_block[EXT2_DIND_BLOCK]);
+
       // update new double indirect block
+      ptr = (uint32_t*)double_indirect_block->get();
+      *ptr = block_index;
       block_cache_->modify(double_indirect_index);
+
     } else {
       uint32_t* ptr = (uint32_t*)indirect_block->get();
       double_indirect_index = *(ptr + num_indirects - 1);
       if (!get_block(double_indirect_index, &double_indirect_block))
         goto error_occured;
-      uint32_t* double_ptr = (uint32_t*)double_indirect_block->get();
-      *(double_ptr + inner_index) = block_index;
-      inode->i_blocks += 2 << super_block_->get_super()->s_log_block_size;
-      // update new double indirect block
+      // update double indirect block
+      ptr = (uint32_t*)double_indirect_block->get();
+      *(ptr + inner_index) = block_index;
       block_cache_->modify(double_indirect_index);
     }
+    // update inode
+    inode->i_blocks += 2 << super_block_->get_super()->s_log_block_size;
   } else {
-    WARNING("Not supported: Too big file!");
-    goto error_occured;
+    if (num_blocks == MAX_DIR_BLOCKS + MAX_IND_BLOCKS + MAX_DIND_BLOCKS) {
+      if (!alloc_block(&indirect_block, &indirect_block_index))
+        goto error_occured;
+      inode->i_block[EXT2_TIND_BLOCK] = indirect_block_index;
+    } else if (!get_block(inode->i_block[EXT2_TIND_BLOCK], &indirect_block))
+      goto error_occured;
+
+    uint32_t num_indirects =
+        (num_blocks - MAX_DIR_BLOCKS - MAX_IND_BLOCKS - 1) / MAX_DIND_BLOCKS;
+    ASSERT(num_indirects <= NUM_INDIRECT_BLOCKS);
+    uint32_t inner_index =
+        (num_blocks - MAX_DIR_BLOCKS - MAX_IND_BLOCKS - MAX_DIND_BLOCKS) %
+        MAX_DIND_BLOCKS;
+
+    uint32_t double_indirect_index, triple_indirect_index;
+    Block *double_indirect_block, *triple_indirect_block;
+
+    if (inner_index == 0) {  // double indirect blocks has been full
+      // allocate new double indirect block
+      if (!alloc_block(&double_indirect_block, &double_indirect_index))
+        goto error_occured;
+      // allocate new triple indirect block
+      if (!alloc_block(&triple_indirect_block, &triple_indirect_index))
+        goto error_occured;
+
+      // update indirect block
+      uint32_t* ptr = (uint32_t*)indirect_block->get();
+      *(ptr + num_indirects) = double_indirect_index;
+      block_cache_->modify(inode->i_block[EXT2_DIND_BLOCK]);
+
+      // update new double indirect block
+      ptr = (uint32_t*)double_indirect_block->get();
+      *ptr = triple_indirect_index;
+      block_cache_->modify(double_indirect_index);
+
+      // update new triple indirect block
+      ptr = (uint32_t*)triple_indirect_block->get();
+      *ptr = block_index;
+      block_cache_->modify(triple_indirect_index);
+
+    } else {
+      uint32_t* ptr = (uint32_t*)indirect_block->get();
+      double_indirect_index = *(ptr + num_indirects - 1);
+      if (!get_block(double_indirect_index, &double_indirect_block))
+        goto error_occured;
+      uint32_t num_double_indirects =
+          (inner_index + MAX_IND_BLOCKS - 1) / MAX_IND_BLOCKS;
+      uint32_t double_inner_index = inner_index % MAX_IND_BLOCKS;
+      if (double_inner_index == 0) {  // triple indirect blocks has been full
+        // allocate new triple indirect block
+        if (!alloc_block(&triple_indirect_block, &triple_indirect_index))
+          goto error_occured;
+
+        // update double indirect block
+        ptr = (uint32_t*)double_indirect_block->get();
+        *(ptr + num_double_indirects) = triple_indirect_index;
+        block_cache_->modify(double_indirect_index);
+
+        // update new triple indirect block
+        ptr = (uint32_t*)triple_indirect_block->get();
+        *ptr = block_index;
+        block_cache_->modify(triple_indirect_index);
+      } else {
+        ptr = (uint32_t*)double_indirect_block->get();
+        triple_indirect_index = *(ptr + num_double_indirects - 1);
+        if (!get_block(triple_indirect_index, &triple_indirect_block))
+          goto error_occured;
+        // update triple indirect block
+        ptr = (uint32_t*)triple_indirect_block->get();
+        *(ptr + double_inner_index) = block_index;
+        block_cache_->modify(triple_indirect_index);
+      }
+    }
+    // update inode
+    inode->i_blocks += 2 << super_block_->get_super()->s_log_block_size;
   }
   *index = block_index;
   return true;

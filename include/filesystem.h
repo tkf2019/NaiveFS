@@ -24,7 +24,8 @@ class FileSystem {
 
   void flush();
 
-  bool inode_create(const Path& path, ext2_inode** inode, uint32_t* inode_index_result, bool dir);
+  bool inode_create(const Path& path, ext2_inode** inode,
+                    uint32_t* inode_index_result, bool dir);
 
   bool inode_create(const Path& path, ext2_inode** inode, bool dir) {
     uint32_t _;
@@ -38,7 +39,8 @@ class FileSystem {
    * @return false if inode does not exist or directory in the path has been
    * deleted
    */
-  bool inode_lookup(const Path& path, ext2_inode** inode, uint32_t* inode_index);
+  bool inode_lookup(const Path& path, ext2_inode** inode,
+                    uint32_t* inode_index);
 
   bool inode_lookup(const Path& path, ext2_inode** inode) {
     uint32_t _;
@@ -46,26 +48,21 @@ class FileSystem {
   }
 
   /**
-   * @brief Lookup inode dentry by given name
-   *
-   * @return true if dentry exists
-   * @return false
-   */
-  bool dentry_lookup(ext2_inode* inode, char* name, ext2_dir_entry_2** dentry);
-
-  /**
-   * @brief Visit inode blocks
-   *
-   * @param visitor visiting loop will be terminated by return value of visitor
-   */
-  void visit_inode_blocks(uint32_t inode_index, const BlockVisitor& visitor);
-
-  /**
    * @brief Visit inode blocks
    *
    * @param visitor visiting loop will be terminated by return value of visitor
    */
   void visit_inode_blocks(ext2_inode* inode, const BlockVisitor& visitor);
+
+  /**
+   * @brief Visit indirect blocks
+   *
+   * @param block basic indirect block
+   * @param num the number of blocks
+   * @param visitor visiting loop will be terminated by return value of visitor
+   */
+  bool visit_indirect_blocks(Block* block, uint32_t num,
+                             const BlockVisitor& visitor);
 
   /**
    * @brief Get the inode from target block group
