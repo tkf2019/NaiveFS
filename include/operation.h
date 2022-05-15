@@ -227,7 +227,7 @@ class OpManager {
 };
 
 extern OpManager *opm;
-
+FileStatus *_fuse_trans_info(struct fuse_file_info *fi);
 /**
  * The file system operations:
  *
