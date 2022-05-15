@@ -46,6 +46,7 @@ Naive file system based on fuse.
     - [ ] `CHOWN`
     - [ ] `TRUNCATE`
     - [ ] `UTIMENS`
+    - [ ] `RENAME`
   - Data: (yfzcsc)
     - [ ] `READ`
     - [ ] `WRITE`

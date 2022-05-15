@@ -3,7 +3,9 @@
 namespace naivefs {
 // options global_options;
 
-int fuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi, enum fuse_readdir_flags flags) {
+int fuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
+                 off_t offset, struct fuse_file_info *fi,
+                 enum fuse_readdir_flags flags) {
   (void)offset;
   (void)fi;
   (void)flags;
@@ -20,8 +22,10 @@ int fuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offs
   fs->visit_inode_blocks(parent, [&buf, &filler](uint32_t index, Block *block) {
     DentryBlock dentry_block(block);
     for (const auto &dentry : *dentry_block.get()) {
-      INFO("readdir entry: (%d) %s", dentry->name_len, std::string(dentry->name, dentry->name_len).c_str());
-      filler(buf, std::string(dentry->name, dentry->name_len).c_str(), NULL, 0, FUSE_FILL_DIR_PLUS);
+      INFO("readdir entry: (%d) %s", dentry->name_len,
+           std::string(dentry->name, dentry->name_len).c_str());
+      filler(buf, std::string(dentry->name, dentry->name_len).c_str(), NULL, 0,
+             FUSE_FILL_DIR_PLUS);
     }
     return false;
   });
@@ -29,16 +33,18 @@ int fuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offs
   return 0;
 }
 
-int fuse_mkdir(const char* path, mode_t mode) {
+int fuse_mkdir(const char *path, mode_t mode) {
   INFO("MKDIR: %s", path);
   mode |= S_IFDIR;
-  ext2_inode* _;
-  if(fs->inode_create(path, &_, true)) return -EINVAL;
+  ext2_inode *_;
+  if (fs->inode_create(path, &_, true)) return -EINVAL;
   return 0;
 }
 
-int fuse_rmdir(const char* path) {
+int fuse_rmdir(const char *path) {
+  DEBUG("RMDIR %s", path);
 
+  return 0;
 }
 
 }  // namespace naivefs
