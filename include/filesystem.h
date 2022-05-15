@@ -24,6 +24,9 @@ class FileSystem {
 
   void flush();
 
+  /**
+   * Create a new inode
+   */
   RetCode inode_create(const Path& path, ext2_inode** inode,
                        uint32_t* inode_index_result, bool dir);
 
@@ -33,19 +36,17 @@ class FileSystem {
   }
 
   /**
-   * @brief Lookup inode by given path
-   *
-   * @return true if inode exists
-   * @return false if inode does not exist or directory in the path has been
-   * deleted
+   * Lookup inode by given path
    */
   RetCode inode_lookup(const Path& path, ext2_inode** inode,
-                       uint32_t* inode_index);
+                       uint32_t* inode_index = nullptr,
+                       DentryCache::Node** cache_ptr = nullptr);
 
-  RetCode inode_lookup(const Path& path, ext2_inode** inode) {
-    uint32_t _;
-    return inode_lookup(path, inode, &_);
-  }
+  /**
+   * @brief Delete an existing inode
+   */
+  RetCode inode_delete(const Path& path, ext2_inode** inode,
+                       uint32_t* inode_index = nullptr);
 
   /**
    * @brief Visit inode blocks
@@ -109,17 +110,21 @@ class FileSystem {
   /**
    * @brief Allocatea a new block group
    *
-   * @param index
+   * @param index newly allocated index
    * @return always true (we assume disk space will not be used up)
    */
   bool alloc_block_group(uint32_t* index);
 
   /**
-   * @brief free blocks
-   *
+   * @brief Free inode with inode index
    *
    */
-  bool free_block(Block* block);
+  bool free_inode(uint32_t index);
+
+  /**
+   * @brief Free block with block index
+   */
+  bool free_block(uint32_t index);
 
  private:
   // Timestamp

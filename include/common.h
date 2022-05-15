@@ -74,7 +74,8 @@ enum RetCode {
   FS_ALLOC_ERR,      // allocation error
   FS_DUP_ERR,        // duplication error
   FS_NULL_ERR,       // null pointer detected
-  FS_TYPE_ERR        // file type error
+  FS_TYPE_ERR,       // file type error
+  FS_INVALID         // invalid argument
 };
 }  // namespace naivefs
 

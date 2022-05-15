@@ -30,7 +30,8 @@ void BlockCache::flush() {
 void BlockCache::insert(uint32_t index, Block* block) {
   DEBUG("[BlockCache] Inserting block %u", index);
   Node* node = nullptr;
-  if (map_.find(index) == map_.end()) {
+  auto iter = map_.find(index);
+  if (iter == map_.end()) {
     if (free_entries_.empty()) {
       node = tail_->prev_;
       detach(node);
@@ -45,7 +46,7 @@ void BlockCache::insert(uint32_t index, Block* block) {
     map_[index] = node;
     attach(node);
   } else {
-    node = map_[index];
+    node = iter->second;
     ASSERT(node->block_ == block);
     detach(node);
     attach(node);
@@ -54,15 +55,29 @@ void BlockCache::insert(uint32_t index, Block* block) {
 
 Block* BlockCache::get(uint32_t index) {
   DEBUG("[BlockCache] Getting block %u", index);
-  Node* node = nullptr;
-  if (map_.find(index) == map_.end()) {
+  auto iter = map_.find(index);
+  if (iter == map_.end()) {
     return nullptr;
   } else {
-    node = map_[index];
+    Node* node = iter->second;
     ASSERT(node->index_ == index);
     detach(node);
     attach(node);
     return node->block_;
+  }
+}
+
+void BlockCache::remove(uint32_t index) {
+  DEBUG("[BlockCache] Removing block %u", index);
+  auto iter = map_.find(index);
+  if (iter == map_.end()) {
+    return;
+  } else {
+    Node* node = iter->second;
+    ASSERT(index == node->index_);
+    detach(node);
+    release(node);
+    map_.erase(node->index_);
   }
 }
 
@@ -130,6 +145,35 @@ DentryCache::Node* DentryCache::lookup(Node* parent, const char* name,
   return nullptr;
 }
 
+void DentryCache::remove(Node* parent, const char* name, size_t name_len) {
+  if (parent == nullptr) parent = root_;
+
+  if (parent->childs_ == nullptr) {
+    DEBUG("[DentryCache] Removing %s: Not found (no child)",
+          std::string(name, name_len).c_str());
+    return;
+  }
+
+  Node* ptr = parent->childs_->next_;
+  Node* prev = ptr;
+  do {
+    if (ptr->name_len_ == name_len &&
+        strncmp(ptr->name_, name, name_len) == 0) {
+      DEBUG("[DentryCache] Removing %s: Found",
+            std::string(name, name_len).c_str());
+      parent->childs_ = (ptr == ptr->next_) ? nullptr : ptr->next_;
+      prev->next_ = ptr->next_;
+      release_node(ptr);
+      free(ptr);
+      return;
+    }
+    prev = ptr;
+    ptr = ptr->next_;
+  } while (ptr != parent->childs_);
+  DEBUG("[DentryCache] Removing %s: Not found (no match)",
+        std::string(name, name_len).c_str());
+}
+
 void DentryCache::release_node(Node* parent) {
   if (parent == nullptr) return;
   Node* ptr = parent->childs_;
@@ -140,7 +184,6 @@ void DentryCache::release_node(Node* parent) {
     free(ptr);
     ptr = next;
   } while (ptr != parent->childs_);
-  parent->childs_ = nullptr;
 }
 
 void DentryCache::alloc_new_node(Node** node, const char* name,

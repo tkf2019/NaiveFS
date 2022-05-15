@@ -31,6 +31,8 @@ class BlockCache {
 
   void insert(uint32_t index, Block* block);
 
+  void remove(uint32_t index);
+
   Block* get(uint32_t index);
 
   void modify(uint32_t index);
@@ -79,7 +81,8 @@ class DentryCache {
 
   ~DentryCache();
 
-  /* Inserts a node as a childs of a given parent.  The parent is updated to
+  /**
+   * Inserts a node as a childs of a given parent.  The parent is updated to
    * point the newly inserted childs as the first childs.  We return the new
    * entry so that further entries can be inserted.
    *
@@ -91,10 +94,17 @@ class DentryCache {
    */
   Node* insert(Node* parent, const char* name, size_t name_len, uint32_t inode);
 
-  /* Lookup a cache entry for a given file name.  Return value is a struct
+  /**
+   * Lookup a cache entry for a given file name.  Return value is a struct
    * pointer that can be used to both obtain the inode number and insert further
-   * child entries. */
+   * child entries.
+   */
   Node* lookup(Node* parent, const char* name, size_t name_len);
+
+  /**
+   * @brief Remove a cache entry for a given file name.
+   */
+  void remove(Node* parent, const char* name, size_t name_len);
 
   void release_node(Node* parent);
 

@@ -100,7 +100,7 @@ void BlockGroup::flush() {
 
 bool BlockGroup::get_inode(uint32_t index, ext2_inode** inode) {
   // invalid inode
-  INFO("inner get inode: %d", index);
+  // INFO("inner get inode: %d", index);
   if (!inode_bitmap_->test(index)) {
     WARNING("Inode has not been allocated in the bitmap!");
     return false;
@@ -137,7 +137,12 @@ bool BlockGroup::alloc_inode(ext2_inode** inode, uint32_t* index, bool dir) {
 
   if (index != nullptr) *index = ret;
   ret = get_inode(ret, inode);
-  if (dir) (*inode)->i_mode = S_IFDIR;
+  memset((void*)(*inode), 0, sizeof(ext2_inode));
+  if (dir) {
+    (*inode)->i_mode |= S_IFDIR;
+  } else {
+    (*inode)->i_mode |= S_IFREG;
+  }
   return ret;
 }
 
@@ -150,6 +155,24 @@ bool BlockGroup::alloc_block(Block** block, uint32_t* index) {
 
   if (index != nullptr) *index = ret;
   *block = new Block(data_block_offset(ret), true);
+  return true;
+}
+
+bool BlockGroup::free_inode(uint32_t index) {
+  ext2_inode* inode;
+  if (!get_inode(index, &inode)) return false;
+  inode_bitmap_->clear(index);
+  // update block group descriptor
+  desc_->bg_free_inodes_count++;
+  if (S_ISDIR(inode->i_mode)) desc_->bg_used_dirs_count++;
+  return true;
+}
+
+bool BlockGroup::free_block(uint32_t index) {
+  if (!block_bitmap_->test(index)) return false;
+  block_bitmap_->clear(index);
+  // update block group descriptor
+  desc_->bg_free_blocks_count++;
   return true;
 }
 

@@ -50,7 +50,6 @@ void test_bitmap() {
   }
   bitmap.set(32);
   bitmap.set(34);
-  std::cout << bitmap.find(100) << std::endl;
   free(buf);
 }
 
@@ -75,30 +74,38 @@ void test_dentry_cache() {
   cache->lookup(node1, "C", 1);
   delete cache;
 }
+using namespace std;
 void test_filesystem() {
   naivefs::disk_open();
   naivefs::FileSystem *fs = new naivefs::FileSystem();
   ext2_inode *home_inode;
-  fs->inode_create("/home", &home_inode, true);
+  INFO("%d", fs->inode_create("/home", &home_inode, true));
   ext2_inode *test_inode;
-  fs->inode_create("/home/test.txt", &test_inode, false);
+  INFO("%d", fs->inode_create("/home/test.txt", &test_inode, false));
   ext2_inode *test2_inode;
-  fs->inode_create("/home/test2.txt", &test2_inode, false);
+  INFO("%d", fs->inode_create("/home/test2.txt", &test2_inode, false));
   ext2_inode *home2_inode;
-  fs->inode_create("/home/tmp", &home2_inode, true);
+  INFO("%d", fs->inode_create("/home/tmp", &home2_inode, true));
   ext2_inode *test3_inode;
-  fs->inode_create("/home/tmp/test.txt", &test3_inode, false);
-  ASSERT(fs->inode_lookup("/home/tmp/test.txt", &test3_inode));
-  for (int i = 0; i < 4096; ++i) {
-    ext2_inode *dir;
-    fs->inode_create((std::string("/home/dir") + std::to_string(i)).c_str(),
-                     &dir, true);
-  }
-  for (int i = 0; i < 4096; ++i) {
-    ext2_inode *dir;
-    fs->inode_lookup((std::string("/home/dir") + std::to_string(i)).c_str(),
-                     &dir);
-  }
+  INFO("%d", fs->inode_create("/home/tmp/test.txt", &test3_inode, false));
+  INFO("%d", fs->inode_lookup("/home/tmp/test.txt", &test3_inode));
+  ext2_inode *d_test2_inode;
+  INFO("%d", fs->inode_delete("/home/test2.txt", &d_test2_inode));
+  ASSERT(d_test2_inode == test2_inode);
+  INFO("%d", fs->inode_lookup("/home/test2.txt", &test2_inode));
+  INFO("%d", fs->inode_create("/home/test2.txt", &test2_inode, false));
+  // for (int i = 0; i < 4096; ++i) {
+  //   ext2_inode *dir;
+  //   fs->inode_create((std::string("/home/dir") +
+  //   std::to_string(i)).c_str(),
+  //                    &dir, true);
+  // }
+  // for (int i = 0; i < 4096; ++i) {
+  //   ext2_inode *dir;
+  //   fs->inode_lookup((std::string("/home/dir") +
+  //   std::to_string(i)).c_str(),
+  //                    &dir);
+  // }
   delete fs;
 }
 
@@ -106,7 +113,7 @@ int main(int argc, char *argv[]) {
   logging_open("test.log");
   INFO("log begin");
 
-  // test_filesystem();
+  test_filesystem();
 
   int ret;
   fuse_args args = FUSE_ARGS_INIT(argc, argv);

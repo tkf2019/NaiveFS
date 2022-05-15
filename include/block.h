@@ -192,7 +192,6 @@ class DentryBlock {
       data += dentry->rec_len;
       dentry = (ext2_dir_entry_2*)data;
     }
-    DEBUG("DentryBlocks Size: %u", size_);
   }
 
   std::vector<ext2_dir_entry_2*>* get() { return &dentries_; }
@@ -234,6 +233,10 @@ class BlockGroup {
   bool alloc_inode(ext2_inode** inode, uint32_t* index, bool dir);
 
   bool alloc_block(Block** block, uint32_t* index);
+
+  bool free_inode(uint32_t index);
+
+  bool free_block(uint32_t index);
 
  private:
   ext2_group_desc* desc_;
