@@ -30,10 +30,10 @@ int fuse_symlink(const char *src, const char *dst) {
   return 0;
 }
 
-int fuse_readlink(const char *path, char * buf, size_t size) {
+int fuse_readlink(const char *path, char *buf, size_t size) {
   std::unique_lock<std::shared_mutex> __lck(_big_lock);
   INFO("READLINK %s", path);
-  
+
   ext2_inode *inode;
   uint32_t inode_id;
   RetCode ret = fs->inode_lookup(path, &inode, &inode_id);
