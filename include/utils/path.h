@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include <vector>
+#include <cstdio>
 
 #include "common.h"
 #include "utils/logging.h"

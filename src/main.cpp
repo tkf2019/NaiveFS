@@ -117,7 +117,7 @@ int main(int argc, char *argv[]) {
   logging_open("test.log");
   INFO("log begin");
 
-  test_filesystem();
+  // test_filesystem();
 
   int ret;
   fuse_args args = FUSE_ARGS_INIT(argc, argv);
@@ -135,6 +135,7 @@ int main(int argc, char *argv[]) {
   ops.read = naivefs::fuse_read;
   ops.write = naivefs::fuse_write;
   ops.mkdir = naivefs::fuse_mkdir;
+  ops.rmdir = naivefs::fuse_rmdir;
   ops.link = naivefs::fuse_link;
   ops.unlink = naivefs::fuse_unlink;
   ops.destroy = naivefs::fuse_destroy;
