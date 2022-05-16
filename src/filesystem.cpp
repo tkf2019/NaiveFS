@@ -262,7 +262,35 @@ RetCode FileSystem::inode_lookup(ext2_inode* parent, const char* name,
   return FS_SUCCESS;
 }
 
-RetCode FileSystem::inode_delete(const Path& path, uint32_t* inode_index) {
+RetCode FileSystem::inode_delete(uint32_t index) {
+  if (index == ROOT_INODE) return FS_INVALID;
+  ext2_inode* inode;
+  if (!get_inode(index, &inode)) return FS_NOT_FOUND;
+  if (!S_ISREG(inode->i_mode) && !S_ISDIR(inode->i_mode)) return FS_NOT_FOUND;
+
+  if (S_ISDIR(inode->i_mode)) {
+    visit_inode_blocks(inode, [this](uint32_t _, Block* block) {
+      DentryBlock dentry_block(block);
+      for (auto dentry : *dentry_block.get()) {
+        // delete an existing inode
+        if (dentry->name_len != 0) {
+          inode_delete(dentry->inode);
+        }
+      }
+      return false;
+    });
+  } else {
+    visit_inode_blocks(inode, [this](uint32_t index, Block* block) {
+      free_block(index);
+      return false;
+    });
+  }
+
+  free_inode(index);
+  return FS_SUCCESS;
+}
+
+RetCode FileSystem::inode_unlink(const Path& path) {
   if (!path.valid()) return FS_INVALID;
   // cannot delete root inode
   if (path.empty()) return FS_INVALID;
@@ -299,47 +327,24 @@ RetCode FileSystem::inode_delete(const Path& path, uint32_t* inode_index) {
   // update block cache
   block_cache_->modify(dentry_block_index);
 
-  // release inode
-  RetCode delete_ret = inode_delete(matched_index);
-  if (delete_ret) return delete_ret;
-
   // release dentry cache node
   auto parent_item = dir_path.back();
   auto cache_ptr = dentry_cache_->lookup(parent_dentry, parent_item.first,
                                          parent_item.second);
   dentry_cache_->remove(cache_ptr, last_item.first, last_item.second);
 
-  if (inode_index != nullptr) *inode_index = matched_index;
-  DEBUG("Delete inode: %i,%s", matched_index,
-        std::string(last_item.first, last_item.second).c_str());
-  return FS_SUCCESS;
-}
-
-RetCode FileSystem::inode_delete(uint32_t index) {
-  if (index == ROOT_INODE) return FS_INVALID;
+  // release inode
   ext2_inode* inode;
-  if (!get_inode(index, &inode)) return FS_NOT_FOUND;
-  if (!S_ISREG(inode->i_mode) && !S_ISDIR(inode->i_mode)) return FS_NOT_FOUND;
-
-  if (S_ISDIR(inode->i_mode)) {
-    visit_inode_blocks(inode, [this](uint32_t _, Block* block) {
-      DentryBlock dentry_block(block);
-      for (auto dentry : *dentry_block.get()) {
-        // delete an existing inode
-        if (dentry->name_len != 0) {
-          inode_delete(dentry->inode);
-        }
-      }
-      return false;
-    });
-  } else {
-    visit_inode_blocks(inode, [this](uint32_t index, Block* block) {
-      free_block(index);
-      return false;
-    });
+  if (!get_inode(matched_index, &inode)) return FS_NOT_FOUND;
+  inode->i_links_count--;
+  if (inode->i_links_count == 0) {
+    RetCode delete_ret = inode_delete(matched_index);
+    if (delete_ret) return delete_ret;
+    DEBUG("Delete inode: %i,%s", matched_index,
+          std::string(last_item.first, last_item.second).c_str());
   }
 
-  free_inode(index);
+  DEBUG("Unlink: %s", path.path());
   return FS_SUCCESS;
 }
 
@@ -607,7 +612,6 @@ bool FileSystem::alloc_block(Block** block, uint32_t* index,
   if (!alloc_block(block, &block_index)) goto error_occured;
 
   if (num_blocks < MAX_DIR_BLOCKS) {
-    inode->i_blocks += 2 << super_block_->get_super()->s_log_block_size;
     inode->i_block[num_blocks] = block_index;
   } else if (num_blocks < MAX_DIR_BLOCKS + MAX_IND_BLOCKS) {
     if (num_blocks == MAX_DIR_BLOCKS) {
@@ -619,7 +623,6 @@ bool FileSystem::alloc_block(Block** block, uint32_t* index,
 
     uint32_t* ptr = (uint32_t*)indirect_block->get();
     *(ptr + (num_blocks - MAX_DIR_BLOCKS)) = block_index;
-    inode->i_blocks += 2 << super_block_->get_super()->s_log_block_size;
     // update block cache
     block_cache_->modify(inode->i_block[EXT2_IND_BLOCK]);
   } else if (num_blocks < MAX_DIR_BLOCKS + MAX_IND_BLOCKS + MAX_DIND_BLOCKS) {
@@ -663,8 +666,6 @@ bool FileSystem::alloc_block(Block** block, uint32_t* index,
       *(ptr + inner_index) = block_index;
       block_cache_->modify(double_indirect_index);
     }
-    // update inode
-    inode->i_blocks += 2 << super_block_->get_super()->s_log_block_size;
   } else {
     if (num_blocks == MAX_DIR_BLOCKS + MAX_IND_BLOCKS + MAX_DIND_BLOCKS) {
       if (!alloc_block(&indirect_block, &indirect_block_index))
@@ -739,9 +740,9 @@ bool FileSystem::alloc_block(Block** block, uint32_t* index,
         block_cache_->modify(triple_indirect_index);
       }
     }
-    // update inode
-    inode->i_blocks += 2 << super_block_->get_super()->s_log_block_size;
   }
+  // update inode
+  inode->i_blocks += 2 << super_block_->get_super()->s_log_block_size;
   *index = block_index;
   return true;
 

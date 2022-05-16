@@ -89,10 +89,10 @@ void test_filesystem() {
   ext2_inode *test3_inode;
   INFO("%d", fs->inode_create("/home/tmp/test.txt", &test3_inode, S_IFREG));
   INFO("%d", fs->inode_lookup("/home/tmp/test.txt", &test3_inode));
-  INFO("%d", fs->inode_delete("home/tmp"));
+  INFO("%d", fs->inode_unlink("/home/tmp"));
   INFO("%d", fs->inode_lookup("/home/tmp/test.txt", &test3_inode));
   ext2_inode *d_test2_inode;
-  INFO("%d", fs->inode_delete("/home/test2.txt"));
+  INFO("%d", fs->inode_unlink("/home/test2.txt"));
   INFO("%d", fs->inode_lookup("/home/test2.txt", &test2_inode));
   INFO("%d", fs->inode_create("/home/test2.txt", &test2_inode, S_IFREG));
   INFO("%d", fs->inode_create("/home/tmp2", &home2_inode, S_IFDIR));

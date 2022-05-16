@@ -63,13 +63,6 @@ class FileSystem {
                        uint32_t* last_block_index = nullptr);
 
   /**
-   * @brief Delete an existing inode. We need to release the data held by dentry
-   * cache. And we set dentry.name_len to 0 to delete the inode in the dentry
-   * block of parent inode.
-   */
-  RetCode inode_delete(const Path& path, uint32_t* inode_index = nullptr);
-
-  /**
    * @brief Delete an existing inode by recursion
    */
   RetCode inode_delete(uint32_t inode_index);
