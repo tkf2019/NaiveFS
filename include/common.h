@@ -96,7 +96,10 @@ inline int Code2Errno(RetCode code) {
       return -EISDIR;
     case FS_INVALID:
       return -EINVAL;
+    case FS_SUCCESS:
+      return 0;
   }
+  return 0;
 }
 }  // namespace naivefs
 

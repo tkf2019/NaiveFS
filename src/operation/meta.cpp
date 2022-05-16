@@ -70,8 +70,8 @@ int fuse_truncate(const char* path, off_t offset, struct fuse_file_info* fi) {
 int fuse_link(const char* src, const char* dst) {
   INFO("LINK %s,%s", src, dst);
 
-  RetCode link_ret = fs->inode_link(src, dst);
-  if (link_ret) return Code2Errno(link_ret);
+  RetCode ret = fs->inode_link(src, dst);
+  if (ret) return Code2Errno(ret);
 
   return 0;
 }
@@ -91,7 +91,7 @@ int fuse_unlink(const char* path) {
     opm->rel_cache(inode_id);
     return -EACCES;
   }
-  RetCode ret = fs->inode_delete(path);
+  RetCode ret = fs->inode_unlink(path);
   ic->unlock();
   if (ret) return Code2Errno(ret);
   return 0;

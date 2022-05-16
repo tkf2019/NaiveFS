@@ -31,9 +31,9 @@ void test_disk() {
   uint8_t *buf = (uint8_t *)naivefs::alloc_aligned(4096);
   memcpy(buf + 2048, "Hello World!", 13);
   naivefs::disk_open();
-  int ret = naivefs::disk_write(0, 2048, buf + 2048);
+  naivefs::disk_write(0, 2048, buf + 2048);
   char *str = (char *)malloc(13);
-  ret = naivefs::disk_read(0, 2048, buf);
+  naivefs::disk_read(0, 2048, buf);
   memcpy(str, buf, 13);
   std::cout << str << std::endl;
   naivefs::disk_close();
@@ -89,13 +89,15 @@ void test_filesystem() {
   ext2_inode *test3_inode;
   INFO("%d", fs->inode_create("/home/tmp/test.txt", &test3_inode, S_IFREG));
   INFO("%d", fs->inode_lookup("/home/tmp/test.txt", &test3_inode));
-  INFO("%d", fs->inode_delete("home/tmp"));
+  INFO("%d", fs->inode_unlink("/home/tmp"));
   INFO("%d", fs->inode_lookup("/home/tmp/test.txt", &test3_inode));
-  ext2_inode *d_test2_inode;
-  INFO("%d", fs->inode_delete("/home/test2.txt"));
+  // ext2_inode *d_test2_inode;
+  INFO("%d", fs->inode_link("/home/test2.txt", "/home/test3.txt"));
+  INFO("%d", fs->inode_unlink("/home/test2.txt"));
   INFO("%d", fs->inode_lookup("/home/test2.txt", &test2_inode));
   INFO("%d", fs->inode_create("/home/test2.txt", &test2_inode, S_IFREG));
   INFO("%d", fs->inode_create("/home/tmp2", &home2_inode, S_IFDIR));
+  INFO("%d", fs->inode_unlink("/home"));
   // for (int i = 0; i < 4096; ++i) {
   //   ext2_inode *dir;
   //   fs->inode_create((std::string("/home/dir") +

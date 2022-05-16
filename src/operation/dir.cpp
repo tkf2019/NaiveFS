@@ -17,7 +17,9 @@ int fuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offs
 
   filler(buf, ".", NULL, 0, FUSE_FILL_DIR_PLUS);
   filler(buf, "..", NULL, 0, FUSE_FILL_DIR_PLUS);
-  fs->visit_inode_blocks(parent, [&buf, &filler](uint32_t index, Block *block) {
+  fs->visit_inode_blocks(parent, [&buf, &filler](__attribute__((unused))
+                                                 uint32_t index,
+                                                 Block *block) {
     DentryBlock dentry_block(block);
     for (const auto &dentry : *dentry_block.get()) {
       INFO("readdir entry: (%d) %s", dentry->name_len, std::string(dentry->name, dentry->name_len).c_str());
