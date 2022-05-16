@@ -132,10 +132,16 @@ int fuse_rename(const char* oldname, const char* newname, unsigned int flags) {
 }
 
 int fuse_truncate(const char* path, off_t offset, struct fuse_file_info* fi) {
+<<<<<<< HEAD
   std::unique_lock<std::shared_mutex> __lck(_big_lock);
   INFO("TRUNATE %s", path);
   // char buf[1];
   // fuse_write(path, buf, 0, offset, fi);
+=======
+  INFO("TRUNCATE %s", path);
+  char buf[1];
+  fuse_write(path, buf, 0, offset, fi);
+>>>>>>> a3a9e056c7c5c541d930e345a5ff9a95b46d6053
   return 0;
 }
 

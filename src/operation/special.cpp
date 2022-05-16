@@ -28,6 +28,7 @@ void fuse_destroy(void* private_data) {
 
   delete fs;
   delete opm;
+  disk_close();
 
   return;
 }

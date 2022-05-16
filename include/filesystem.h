@@ -157,6 +157,15 @@ class FileSystem {
    */
   bool free_block(uint32_t index);
 
+  /**
+   * @brief Write data to block
+   */
+  inline void write_block(Block* block, uint32_t index, const char* buf,
+                          size_t size) {
+    memcpy(block->get(), buf, size);
+    block_cache_->modify(index);
+  }
+
  private:
   // Timestamp
   timeval time_;
