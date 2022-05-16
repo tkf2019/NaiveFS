@@ -27,20 +27,18 @@ Naive file system based on fuse.
 
 - [x] A makefile for whole project. Thus we can run tests and build targets in different environments.
 
-- - FUSE operations:
+- FUSE operations:
   - Special：
     - [x] `INIT`
-    - [ ] `DESTROY`
+    - [x] `DESTROY`
     - [ ] `INTERRUPT`
   - Metadata:
-    - [ ] `OPEN`
-    - [ ] `CREATE`
+    - [x] `OPEN`
+    - [x] `CREATE`
     - [ ] `STATFS`
-    - [ ] `LINK`
-    - [ ] `UNLINK`
+    - [x] `LINK`
+    - [x] `UNLINK`
     - [ ] `RELEASE`
-    - [ ] `FSYNC`
-    - [ ] `FLUSH`
     - [ ] `ACCESS`
     - [ ] `CHMOD`
     - [ ] `CHOWN`
