@@ -123,6 +123,8 @@ DentryCache::Node* DentryCache::lookup(Node* parent, const char* name,
                                        size_t name_len) {
   if (parent == nullptr) parent = root_;
 
+  if (name_len == 0) return nullptr;
+
   if (parent->childs_ == nullptr) {
     DEBUG("[DentryCache] Looking up %s: Not found (no child)",
           std::string(name, name_len).c_str());
@@ -169,7 +171,7 @@ void DentryCache::remove(Node* parent, const char* name, size_t name_len) {
     }
     prev = ptr;
     ptr = ptr->next_;
-  } while (ptr != parent->childs_);
+  } while (ptr != parent->childs_->next_);
   DEBUG("[DentryCache] Removing %s: Not found (no match)",
         std::string(name, name_len).c_str());
 }
