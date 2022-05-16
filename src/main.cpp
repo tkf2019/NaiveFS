@@ -146,13 +146,10 @@ int main(int argc, char *argv[]) {
   ops.chmod = naivefs::fuse_chmod;
   ops.symlink = naivefs::fuse_symlink;
   ops.readlink = naivefs::fuse_readlink;
-<<<<<<< HEAD
   ops.truncate = naivefs::fuse_truncate;
   ops.utimens = naivefs::fuse_utimens;
   ops.flush = naivefs::fuse_flush;
   ops.chown = naivefs::fuse_chown;
-=======
->>>>>>> a3a9e056c7c5c541d930e345a5ff9a95b46d6053
   ret = fuse_main(args.argc, args.argv, &ops, NULL);
   fuse_opt_free_args(&args);
   return ret;
