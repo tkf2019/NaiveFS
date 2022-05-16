@@ -2,10 +2,13 @@
 
 namespace naivefs {
 
-int fuse_getattr(const char *path, struct stat *stbuf,
-                 struct fuse_file_info *fi) {
+extern std::shared_mutex _big_lock;
+
+int fuse_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi) {
+  std::unique_lock<std::shared_mutex> __lck(_big_lock);
   (void)fi;
   INFO("GETATTR: %s", path);
+  if (!stbuf) return -EINVAL;
   ext2_inode *inode;
   uint32_t inode_id;
 
@@ -16,6 +19,7 @@ int fuse_getattr(const char *path, struct stat *stbuf,
 
   // can't get inode
   if (!ic) return -EIO;
+
 
   memset(stbuf, 0, sizeof(struct stat));
   ic->lock_shared();
@@ -40,8 +44,8 @@ int fuse_getattr(const char *path, struct stat *stbuf,
   return 0;
 }
 
-int fuse_chmod(const char *path, mode_t mode,
-                 struct fuse_file_info *fi) {
+int fuse_chmod(const char *path, mode_t mode, struct fuse_file_info *fi) {
+  std::unique_lock<std::shared_mutex> __lck(_big_lock);
   (void)fi;
   INFO("CHMOD: %s", path);
   ext2_inode *inode;
@@ -50,6 +54,7 @@ int fuse_chmod(const char *path, mode_t mode,
   // we assume inode_lookup is thread-safe
   auto ret = fs->inode_lookup(path, &inode, &inode_id);
   if (ret) return Code2Errno(ret);
+  if (!_check_permission(inode->i_mode, 1, 1, 0, inode->i_gid, inode->i_uid)) return -EACCES;
   auto ic = opm->get_cache(inode_id);
 
   // can't get inode
@@ -58,12 +63,12 @@ int fuse_chmod(const char *path, mode_t mode,
   ic->lock();
   inode = ic->cache_;
   inode->i_mode = mode;
+  ic->commit();
   ic->unlock();
   opm->rel_cache(inode_id);
   INFO("CHMOD END");
 
   return 0;
 }
-
 
 }  // namespace naivefs

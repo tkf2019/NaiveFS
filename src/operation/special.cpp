@@ -6,6 +6,7 @@ namespace naivefs {
 
 FileSystem* fs;
 OpManager* opm;
+std::shared_mutex _big_lock;
 
 void* fuse_init(struct fuse_conn_info* info, fuse_config* config) {
   INFO("INIT");

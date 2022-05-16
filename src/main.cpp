@@ -144,6 +144,12 @@ int main(int argc, char *argv[]) {
   ops.release = naivefs::fuse_release;
   ops.fsync = naivefs::fuse_fsync;
   ops.chmod = naivefs::fuse_chmod;
+  ops.symlink = naivefs::fuse_symlink;
+  ops.readlink = naivefs::fuse_readlink;
+  ops.truncate = naivefs::fuse_truncate;
+  ops.utimens = naivefs::fuse_utimens;
+  ops.flush = naivefs::fuse_flush;
+  ops.chown = naivefs::fuse_chown;
   ret = fuse_main(args.argc, args.argv, &ops, NULL);
   fuse_opt_free_args(&args);
   return ret;

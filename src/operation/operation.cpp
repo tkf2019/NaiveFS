@@ -283,4 +283,42 @@ void InodeCache::upd_all() {
 
 FileStatus* _fuse_trans_info(struct fuse_file_info* fi) { return reinterpret_cast<FileStatus*>(fi->fh); }
 
+bool _check_permission(mode_t mode, int read, int write, int exec, gid_t gid, uid_t uid) {
+  auto current_user = fuse_get_context();
+  if(current_user->gid == gid) {
+    bool flag = true;
+    flag &= (mode & S_IRGRP) || !read;
+    flag &= (mode & S_IWGRP) || !write;
+    flag &= (mode & S_IXGRP) || !exec;
+    if(flag) return true;
+  }
+  if(current_user->uid == uid) {
+    bool flag = true;
+    flag &= (mode & S_IRUSR) || !read;
+    flag &= (mode & S_IWUSR) || !write;
+    flag &= (mode & S_IXUSR) || !exec;
+    if(flag) return true;
+  }
+  bool flag = true;
+  flag &= (mode & S_IROTH) || !read;
+  flag &= (mode & S_IWOTH) || !write;
+  flag &= (mode & S_IXOTH) || !exec;
+  return flag;
+}
+
+bool _check_user(uid_t mode, uid_t uid, int read, int write, int exec) {
+  auto current_user = fuse_get_context();
+  // owner or super
+  if(current_user->uid == uid) {
+    bool flag = true;
+    flag &= (mode & S_IRUSR) || !read;
+    flag &= (mode & S_IWUSR) || !write;
+    flag &= (mode & S_IXUSR) || !exec;
+    if(flag) return true;
+  }
+  if(current_user->uid == 0)
+    return true;
+  return false;
+}
+
 }  // namespace naivefs

@@ -272,7 +272,12 @@ class OpManager {
     std::unique_lock<std::shared_mutex> lck_ic(it->second->inode_rwlock_);
     fd->fslist_ptr_ = it->second->vec.ins(fd);
   }
-
+  /**
+   * @brief try to release an InodeCache object
+   * 
+   * @param inode_id 
+   * @return int 
+   */
   int rel_cache(uint32_t inode_id) {
     std::unique_lock<std::shared_mutex> lck(m_);
     auto it = st_.find(inode_id);
@@ -300,6 +305,8 @@ class OpManager {
 
 extern OpManager *opm;
 FileStatus *_fuse_trans_info(struct fuse_file_info *fi);
+bool _check_permission(mode_t mode, int read, int write, int exec, gid_t gid, uid_t uid);
+bool _check_user(uid_t mode, uid_t uid, int read, int write, int exec);
 /**
  * The file system operations:
  *
