@@ -61,8 +61,8 @@ Naive file system based on fuse.
     - [ ] `LISTXATTR` (not necessary)
     - [ ] `REMOVEXATTR` (not necessary)
   - Symlinks: (yfzcsc)
-    - [ ] `SYMLINK`
-    - [ ] `READLINK`
+    - [x] `SYMLINK`
+    - [x] `READLINK`
   - Directory: (yfzcsc)
     - [x] `MKDIR`
     - [x] `RMDIR`
