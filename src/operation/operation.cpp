@@ -1,6 +1,7 @@
 #include "operation.h"
 namespace naivefs {
 int FileStatus::next_block() {
+  INFO("next_block: %d", block_id_in_file_);
   if (block_id_in_file_ <= IBLOCK_11) {
     // The first 12 blocks
     block_id_in_file_++;
@@ -142,6 +143,7 @@ int FileStatus::copy_to_buf(char* buf, size_t offset, size_t size) {
   size_t csz = std::min(size, BLOCK_SIZE - (size_t)offset % BLOCK_SIZE);
   memcpy(buf, blk->get() + offset % BLOCK_SIZE, csz);
   ret += csz, size -= csz, offset += csz, buf += csz;
+  INFO("copy_to_buf: ret: %llu, size: %llu, offset: %llu", ret, size, offset);
   while (size) {
     if (offset >= isize) return ret;
     _err_ret = next_block();
@@ -165,9 +167,10 @@ int FileStatus::write(const char* buf, size_t offset, size_t size, bool append_f
   int _err_ret = _upd_cache();
   if (_err_ret) {
     inode_cache_->unlock_shared();
+    INFO("write: error: %d", _err_ret);
     return _err_ret;
   }
-  if (append_flag) offset = inode_cache_->cache_->i_size;
+  if (append_flag) offset = isize;
   INFO("Begin to write, now block: %u(%u), write offset: %llu\n", block_id_, block_id_in_file_, offset);
   if (offset + size > isize) {
     // Now we need to modify the inode.
@@ -175,6 +178,7 @@ int FileStatus::write(const char* buf, size_t offset, size_t size, bool append_f
     std::unique_lock<std::shared_mutex> inode_lck(inode_cache_->inode_rwlock_);
     isize = file_size();
     if (offset > isize) return 0;
+    if (append_flag) offset = isize;
 
     Block* blk;
     if (isize % BLOCK_SIZE == 0) {
@@ -196,12 +200,24 @@ int FileStatus::write(const char* buf, size_t offset, size_t size, bool append_f
         INFO("write: need allocation");
         uint32_t _;
         if (!fs->alloc_block(&blk, &_, inode_cache_->cache_)) return ret;
-        if (next_block()) return -EIO;
-        if (!fs->get_block(block_id_, &blk)) return -EIO;
+        if (next_block()) {
+          INFO("write: EIO");
+          return -EIO;
+        }
+        if (!fs->get_block(block_id_, &blk)) {
+          INFO("write: EIO");
+          return -EIO;
+        }
       } else {
         INFO("write: don't need allocation");
-        if (next_block()) return -EIO;
-        if (!fs->get_block(block_id_, &blk)) return -EIO;
+        if (next_block()) {
+          INFO("write: EIO");
+          return -EIO;
+        }
+        if (!fs->get_block(block_id_, &blk)) {
+          INFO("write: EIO");
+          return -EIO;
+        }
       }
       csz = std::min(size, (size_t)BLOCK_SIZE);
       memcpy(blk->get(), buf + ret, csz);
@@ -209,6 +225,7 @@ int FileStatus::write(const char* buf, size_t offset, size_t size, bool append_f
     }
 
     inode_cache_->upd_all();
+    INFO("write: end");
 
     return ret;
 
@@ -220,19 +237,28 @@ int FileStatus::write(const char* buf, size_t offset, size_t size, bool append_f
       return _err_ret;
     }
     Block* blk;
-    if (!fs->get_block(block_id_, &blk)) return -EINVAL;
+    if (!fs->get_block(block_id_, &blk)) {
+      inode_cache_->unlock_shared();
+      return -EINVAL;
+    }
     size_t ret = 0;
     size_t csz = std::min(size, BLOCK_SIZE - (size_t)offset % BLOCK_SIZE);
     memcpy(blk->get() + offset % BLOCK_SIZE, buf + ret, csz);
     ret += csz, size -= csz, offset += csz;
     while (size) {
-      if (offset >= isize) return ret;
+      if (offset >= isize) {
+        inode_cache_->unlock_shared();
+        return ret;
+      }
       _err_ret = next_block();
       if (_err_ret) {
         inode_cache_->unlock_shared();
         return _err_ret;
       }
-      if (!fs->get_block(block_id_, &blk)) return -EINVAL;
+      if (!fs->get_block(block_id_, &blk)) {
+        inode_cache_->unlock_shared();
+        return -EINVAL;
+      }
       csz = std::min(size, (size_t)BLOCK_SIZE);
       memcpy(blk->get(), buf + ret, csz);
       ret += csz, size -= csz, offset += csz;
@@ -243,8 +269,9 @@ int FileStatus::write(const char* buf, size_t offset, size_t size, bool append_f
   return 0;
 }
 void InodeCache::upd_all() {
+  vec.iter([](FileStatus*& ptr) { ptr->cache_update_flag_ = true; });
   // in critical section
-  for (const auto& a : vec) a->cache_update_flag_ = true;
+  // for (const auto& a : vec) a->cache_update_flag_ = true;
 }
 
 FileStatus* _fuse_trans_info(struct fuse_file_info* fi) { return reinterpret_cast<FileStatus*>(fi->fh); }
