@@ -37,39 +37,39 @@ Naive file system based on fuse.
     - [ ] `STATFS`
     - [x] `LINK`
     - [x] `UNLINK`
-    - [ ] `RELEASE`
+    - [x] `RELEASE`
     - [ ] `ACCESS`
-    - [ ] `CHMOD`
+    - [x] `CHMOD`
     - [ ] `CHOWN`
-    - [ ] `TRUNCATE`
-    - [ ] `UTIMENS`
-    - [ ] `RENAME`
+    - [x] `TRUNCATE`
+    - [x] `UTIMENS`
+    - [x] `RENAME`
   - Data: (yfzcsc)
-    - [ ] `READ`
-    - [ ] `WRITE`
-    - [ ] `FLUSH`
-    - [ ] `FSYNC`
-    - [ ] `COPY_FILE_RANGE`
-    - [ ] `WRITE_BUF`
-    - [ ] `READ_BUF`
+    - [x] `READ`
+    - [x] `WRITE`
+    - [x] `FLUSH`
+    - [x] `FSYNC`
+    - [ ] `COPY_FILE_RANGE` (not necessary)
+    - [ ] `WRITE_BUF` (not necessary)
+    - [ ] `READ_BUF` (not necessary)
   - Attributes: (yfzcsc)
-    - [ ] `GETATTR`
+    - [x] `GETATTR`
     - [ ] `SETATTR`
   - Extended Attributes: (yfzcsc)
-    - [ ] `SETXATTR`
-    - [ ] `GETXATTR`
-    - [ ] `LISTXATTR`
-    - [ ] `REMOVEXATTR`
+    - [ ] `SETXATTR` (not necessary)
+    - [ ] `GETXATTR` (not necessary)
+    - [ ] `LISTXATTR` (not necessary)
+    - [ ] `REMOVEXATTR` (not necessary)
   - Symlinks: (yfzcsc)
     - [ ] `SYMLINK`
     - [ ] `READLINK`
   - Directory: (yfzcsc)
-    - [ ] `MKDIR`
-    - [ ] `RMDIR`
-    - [ ] `OPENDIR` 
-    - [ ] `RELEASEDIR`
-    - [ ] `READDIR`
-    - [ ] `FSYNCDIR`
+    - [x] `MKDIR`
+    - [x] `RMDIR`
+    - [ ] `OPENDIR`  (not necessary)
+    - [ ] `RELEASEDIR` (not necessary)
+    - [x] `READDIR` 
+    - [ ] `FSYNCDIR` (not necessary)
   - Locking:
     - [ ] `LOCK`
     - [ ] `FLOCK`
