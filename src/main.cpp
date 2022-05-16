@@ -115,7 +115,7 @@ int main(int argc, char *argv[]) {
   logging_open("test.log");
   INFO("log begin");
 
-  test_filesystem();
+  // test_filesystem();
 
   int ret;
   fuse_args args = FUSE_ARGS_INIT(argc, argv);

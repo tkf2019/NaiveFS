@@ -786,6 +786,7 @@ bool FileSystem::free_inode(uint32_t index) {
                             super_block_->get_group_desc(block_group_index))})
                .first;
   }
+  DEBUG("Free END");
   if (!iter->second->free_inode(inner_index)) {
     WARNING("Attempting to free nonexistent inode!");
     return false;
