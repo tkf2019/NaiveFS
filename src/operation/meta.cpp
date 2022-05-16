@@ -1,5 +1,11 @@
 #include "operation.h"
 
+
+// from https://elixir.bootlin.com/linux/v4.9.33/source/include/uapi/linux/fs.h#L41
+#define RENAME_NOREPLACE	(1 << 0)	/* Don't overwrite target */
+#define RENAME_EXCHANGE		(1 << 1)	/* Exchange source and dest */
+#define RENAME_WHITEOUT		(1 << 2)	/* Whiteout source */
+
 namespace naivefs {
 int fuse_create(const char* path, mode_t mode, struct fuse_file_info* fi) {
   INFO("CREATE %s, mode %d", path, mode);
@@ -70,6 +76,49 @@ int fuse_open(const char* path, struct fuse_file_info* fi) {
 
 int fuse_rename(const char* oldname, const char* newname, unsigned int flags) {
   INFO("RENAME %s, %s", oldname, newname);
+  
+  if (flags == RENAME_EXCHANGE) {
+    ext2_inode* _;
+    // atomicitily exchange two existing files
+    if (fs->inode_lookup(newname, &_)) return -ENOENT;
+    if (fs->inode_lookup(oldname, &_)) return -ENOENT;
+    RetCode ret = fs->inode_link(oldname, "/<a");
+    if (ret) return Code2Errno(ret);
+    ret = fs->inode_unlink(oldname);
+    if (ret) return Code2Errno(ret);
+    ret = fs->inode_link(newname, oldname);
+    if (ret) return Code2Errno(ret);
+    ret = fs->inode_link(oldname, newname);
+    if (ret) return Code2Errno(ret);
+    ret = fs->inode_unlink("/<a");
+    if (ret) return Code2Errno(ret);
+  } else if (flags == RENAME_NOREPLACE) {
+    // don't replace an existing file
+    ext2_inode* _;
+    if (!fs->inode_lookup(newname, &_)) return -EEXIST;
+    if (fs->inode_lookup(oldname, &_)) return -ENOENT;
+    RetCode ret = fs->inode_link(oldname, newname);
+    if (ret) return Code2Errno(ret);
+    ret = fs->inode_unlink(oldname);
+    if (ret) return Code2Errno(ret);
+  } else if (flags == 0){
+    // replace existing file
+
+    ext2_inode* _;
+    if (fs->inode_lookup(oldname, &_)) return -ENOENT;
+    if (!fs->inode_lookup(newname, &_)) {
+      RetCode ret = fs->inode_unlink(newname);
+      if (ret) return Code2Errno(ret);
+    }
+    RetCode ret = fs->inode_link(oldname, newname);
+    if (ret) return Code2Errno(ret);
+    ret = fs->inode_unlink(oldname);
+    if (ret) return Code2Errno(ret);
+
+  } else {
+    WARNING("fuse rename: invalid flags, %d", flags);
+    return -EINVAL;
+  }
   return 0;
 }
 
