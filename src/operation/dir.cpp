@@ -37,7 +37,7 @@ int fuse_mkdir(const char *path, mode_t mode) {
   INFO("MKDIR: %s", path);
   mode |= S_IFDIR;
   ext2_inode *_;
-  if (fs->inode_create(path, &_, true)) return -EINVAL;
+  if (fs->inode_create(path, &_, mode)) return -EINVAL;
   return 0;
 }
 

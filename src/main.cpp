@@ -79,22 +79,23 @@ void test_filesystem() {
   naivefs::disk_open();
   naivefs::FileSystem *fs = new naivefs::FileSystem();
   ext2_inode *home_inode;
-  INFO("%d", fs->inode_create("/home", &home_inode, true));
+  INFO("%d", fs->inode_create("/home", &home_inode, S_IFDIR));
   ext2_inode *test_inode;
-  INFO("%d", fs->inode_create("/home/test.txt", &test_inode, false));
+  INFO("%d", fs->inode_create("/home/test.txt", &test_inode, S_IFREG));
   ext2_inode *test2_inode;
-  INFO("%d", fs->inode_create("/home/test2.txt", &test2_inode, false));
+  INFO("%d", fs->inode_create("/home/test2.txt", &test2_inode, S_IFREG));
   ext2_inode *home2_inode;
-  INFO("%d", fs->inode_create("/home/tmp", &home2_inode, true));
+  INFO("%d", fs->inode_create("/home/tmp", &home2_inode, S_IFDIR));
   ext2_inode *test3_inode;
-  INFO("%d", fs->inode_create("/home/tmp/test.txt", &test3_inode, false));
+  INFO("%d", fs->inode_create("/home/tmp/test.txt", &test3_inode, S_IFREG));
+  INFO("%d", fs->inode_lookup("/home/tmp/test.txt", &test3_inode));
   INFO("%d", fs->inode_delete("home/tmp"));
   INFO("%d", fs->inode_lookup("/home/tmp/test.txt", &test3_inode));
   ext2_inode *d_test2_inode;
   INFO("%d", fs->inode_delete("/home/test2.txt"));
   INFO("%d", fs->inode_lookup("/home/test2.txt", &test2_inode));
-  INFO("%d", fs->inode_create("/home/test2.txt", &test2_inode, false));
-  INFO("%d", fs->inode_create("/home/tmp2", &home2_inode, true));
+  INFO("%d", fs->inode_create("/home/test2.txt", &test2_inode, S_IFREG));
+  INFO("%d", fs->inode_create("/home/tmp2", &home2_inode, S_IFDIR));
   // for (int i = 0; i < 4096; ++i) {
   //   ext2_inode *dir;
   //   fs->inode_create((std::string("/home/dir") +
@@ -114,7 +115,7 @@ int main(int argc, char *argv[]) {
   logging_open("test.log");
   INFO("log begin");
 
-  // test_filesystem();
+  test_filesystem();
 
   int ret;
   fuse_args args = FUSE_ARGS_INIT(argc, argv);
@@ -136,6 +137,7 @@ int main(int argc, char *argv[]) {
   ops.unlink = naivefs::fuse_unlink;
   ops.destroy = naivefs::fuse_destroy;
   ops.rename = naivefs::fuse_rename;
+  ops.access = naivefs::fuse_access;
   ret = fuse_main(args.argc, args.argv, &ops, NULL);
   fuse_opt_free_args(&args);
   return ret;

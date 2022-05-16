@@ -58,6 +58,8 @@ class Path {
     return name_list_[name_list_.size() - 1];
   }
 
+  inline const char* path() const noexcept { return path_; }
+
  private:
   bool valid_;
   const char* path_;

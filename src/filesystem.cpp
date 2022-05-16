@@ -59,7 +59,7 @@ FileSystem::FileSystem()
   // init root inode
   if (!block_groups_[0]->get_inode(ROOT_INODE, &root_inode_)) {
     // alloc new root inode
-    ASSERT(block_groups_[0]->alloc_inode(&root_inode_, nullptr, true));
+    ASSERT(block_groups_[0]->alloc_inode(&root_inode_, nullptr, S_IFDIR));
     inode_init(root_inode_);
     // root directory: cannot be written or executed
     root_inode_->i_mode =
@@ -96,7 +96,7 @@ void FileSystem::flush() {
 }
 
 RetCode FileSystem::inode_create(const Path& path, ext2_inode** inode,
-                                 uint32_t* inode_index_result, bool dir) {
+                                 uint32_t* inode_index_result, mode_t mode) {
   if (!path.valid()) return FS_INVALID;
   // cannot create root inode
   if (path.empty()) return FS_DUP_ERR;
@@ -105,31 +105,18 @@ RetCode FileSystem::inode_create(const Path& path, ext2_inode** inode,
   if (!inode_index_result) return FS_NULL_ERR;
   RetCode lookup_ret = inode_lookup(Path(path, path.size() - 1), &parent);
   if (lookup_ret) return lookup_ret;
-  if (!S_ISDIR(parent->i_mode)) return FS_TYPE_ERR;
+  if (!S_ISDIR(parent->i_mode)) return FS_NDIR_ERR;
 
+  // Check if name already exists
   Block* last_block = nullptr;
   uint32_t last_block_index;
   auto last_item = path.back();
-
-  // Check if name already exists
   uint32_t inode_index;
   bool name_exists = false;
-  visit_inode_blocks(
-      parent, [&inode_index, &name_exists, &last_block, &last_block_index,
-               last_item](uint32_t index, Block* block) {
-        DentryBlock dentry_block(block);
-        for (auto dentry : *dentry_block.get()) {
-          if (dentry->name_len != last_item.second) continue;
-          if (memcmp(last_item.first, dentry->name, dentry->name_len)) continue;
-          // find a matched directory entry
-          name_exists = true;
-          inode_index = dentry->inode;
-        }
-
-        last_block = block;
-        last_block_index = index;
-        return false;
-      });
+  lookup_ret =
+      inode_lookup(parent, last_item.first, last_item.second, &name_exists,
+                   &inode_index, &last_block, &last_block_index);
+  if (lookup_ret) return lookup_ret;
   if (name_exists) {
     WARNING("Create a duplicated inode: %u", inode_index);
     *inode_index_result = inode_index;
@@ -138,9 +125,23 @@ RetCode FileSystem::inode_create(const Path& path, ext2_inode** inode,
   }
 
   // allocate new inode
-  if (!alloc_inode(inode, &inode_index, dir)) return FS_ALLOC_ERR;
+  if (!alloc_inode(inode, &inode_index, mode)) return FS_ALLOC_ERR;
 
-  // get parent last dentry block
+  RetCode dentry_ret =
+      dentry_create(last_block, last_block_index, parent, last_item.first,
+                    last_item.second, inode_index, mode);
+  if (dentry_ret) return dentry_ret;
+
+  DEBUG("Create inode: %i,%s", inode_index,
+        std::string(path.back().first).c_str());
+  *inode_index_result = inode_index;
+  return FS_SUCCESS;
+}
+
+RetCode FileSystem::dentry_create(Block* last_block, uint32_t last_block_index,
+                                  ext2_inode* parent, const char* name,
+                                  size_t name_len, uint32_t inode_index,
+                                  mode_t mode) {
   if (last_block == nullptr) {
     if (!alloc_block(&last_block, &last_block_index, parent)) {
       return FS_ALLOC_ERR;
@@ -149,23 +150,18 @@ RetCode FileSystem::inode_create(const Path& path, ext2_inode** inode,
   DentryBlock* dentry_block = new DentryBlock(last_block);
 
   // update dentry block
-  if (dentry_block->size() + sizeof(ext2_dir_entry_2) + last_item.second >
-      BLOCK_SIZE) {
+  if (dentry_block->size() + sizeof(ext2_dir_entry_2) + name_len > BLOCK_SIZE) {
     if (!alloc_block(&last_block, &last_block_index, parent))
       return FS_ALLOC_ERR;
     delete dentry_block;
     dentry_block = new DentryBlock(last_block);
   }
-  dentry_block->alloc_dentry(last_item.first, last_item.second, inode_index,
-                             dir);
+  dentry_block->alloc_dentry(name, name_len, inode_index, mode);
   block_cache_->modify(last_block_index);
   // We cannot put the new dentry into cache because we do not know the
   // parent. We add the dentry into cache after next lookup.
   delete dentry_block;
 
-  DEBUG("Create inode: %i,%s", inode_index,
-        std::string(path.back().first).c_str());
-  *inode_index_result = inode_index;
   return FS_SUCCESS;
 }
 
@@ -196,7 +192,7 @@ RetCode FileSystem::inode_lookup(const Path& path, ext2_inode** inode,
       }
       // final item can be a file or a directory
       if (curr_index < path.size() - 1 && !S_ISDIR((*inode)->i_mode))
-        return FS_TYPE_ERR;
+        return FS_NDIR_ERR;
 
       result = -1;
       visit_inode_blocks(
@@ -243,6 +239,29 @@ RetCode FileSystem::inode_lookup(const Path& path, ext2_inode** inode,
   return FS_SUCCESS;
 }
 
+RetCode FileSystem::inode_lookup(ext2_inode* parent, const char* name,
+                                 size_t name_len, bool* name_exists,
+                                 uint32_t* inode_index, Block** last_block,
+                                 uint32_t* last_block_index) {
+  auto visitor = [name, name_len, &inode_index, &name_exists, &last_block,
+                  &last_block_index](uint32_t index, Block* block) {
+    DentryBlock dentry_block(block);
+    for (auto dentry : *dentry_block.get()) {
+      if (dentry->name_len != name_len) continue;
+      if (memcmp(name, dentry->name, dentry->name_len)) continue;
+      // find a matched directory entry
+      if (name_exists != nullptr) *name_exists = true;
+      if (inode_index != nullptr) *inode_index = dentry->inode;
+    }
+
+    if (last_block != nullptr) *last_block = block;
+    if (last_block_index != nullptr) *last_block_index = index;
+    return false;
+  };
+  visit_inode_blocks(parent, visitor);
+  return FS_SUCCESS;
+}
+
 RetCode FileSystem::inode_delete(const Path& path, uint32_t* inode_index) {
   if (!path.valid()) return FS_INVALID;
   // cannot delete root inode
@@ -253,7 +272,7 @@ RetCode FileSystem::inode_delete(const Path& path, uint32_t* inode_index) {
   Path dir_path = Path(path, path.size() - 1);
   RetCode lookup_ret = inode_lookup(dir_path, &parent, nullptr, &parent_dentry);
   if (lookup_ret) return lookup_ret;
-  if (!S_ISDIR(parent->i_mode)) return FS_TYPE_ERR;
+  if (!S_ISDIR(parent->i_mode)) return FS_NDIR_ERR;
 
   auto last_item = path.back();
   uint32_t dentry_block_index;
@@ -300,7 +319,7 @@ RetCode FileSystem::inode_delete(uint32_t index) {
   if (index == ROOT_INODE) return FS_INVALID;
   ext2_inode* inode;
   if (!get_inode(index, &inode)) return FS_NOT_FOUND;
-  if (!S_ISREG(inode->i_mode) && !S_ISDIR(inode->i_mode)) return FS_TYPE_ERR;
+  if (!S_ISREG(inode->i_mode) && !S_ISDIR(inode->i_mode)) return FS_NOT_FOUND;
 
   if (S_ISDIR(inode->i_mode)) {
     visit_inode_blocks(inode, [this](uint32_t _, Block* block) {
@@ -321,6 +340,50 @@ RetCode FileSystem::inode_delete(uint32_t index) {
   }
 
   free_inode(index);
+  return FS_SUCCESS;
+}
+
+RetCode FileSystem::inode_link(const Path& src, const Path& dst) {
+  if (!src.valid() || !dst.valid()) return FS_INVALID;
+  // cannot create link from or to root inode
+  if (src.empty() || dst.empty()) return FS_DUP_ERR;
+
+  uint32_t inode_index;
+  ext2_inode* src_inode;
+  // look up source inode
+  RetCode lookup_ret = inode_lookup(src, &src_inode, &inode_index);
+  if (lookup_ret) return lookup_ret;
+
+  ext2_inode* parent;
+  lookup_ret = inode_lookup(Path(dst, dst.size() - 1), &parent);
+  if (lookup_ret) return lookup_ret;
+  if (!S_ISDIR(parent->i_mode)) return FS_NDIR_ERR;
+
+  // Check if name already exists
+  Block* last_block = nullptr;
+  uint32_t last_block_index;
+  auto last_item = dst.back();
+  bool name_exists = false;
+  lookup_ret =
+      inode_lookup(parent, last_item.first, last_item.second, &name_exists,
+                   &inode_index, &last_block, &last_block_index);
+  if (lookup_ret) return lookup_ret;
+  if (name_exists) {
+    WARNING("Cannot link with a duplicated dentry");
+    return FS_DUP_ERR;
+  }
+
+  // Inode index will bot be changed after looking up source inode if name to
+  // create is not in duplicate with existing dentries.
+  RetCode dentry_ret =
+      dentry_create(last_block, last_block_index, parent, last_item.first,
+                    last_item.second, inode_index, src_inode->i_mode);
+  if (dentry_ret) return dentry_ret;
+
+  // update source inode
+  src_inode->i_links_count++;
+
+  DEBUG("Create link: %s => %s", dst.path(), src.path());
   return FS_SUCCESS;
 }
 
@@ -466,7 +529,7 @@ bool FileSystem::get_block(uint32_t index, Block** block) {
   return true;
 }
 
-bool FileSystem::alloc_inode(ext2_inode** inode, uint32_t* index, bool dir) {
+bool FileSystem::alloc_inode(ext2_inode** inode, uint32_t* index, mode_t mode) {
   // update super block
   super_block_->get_super()->s_free_inodes_count--;
   super_block_->get_super()->s_inodes_count++;
@@ -475,7 +538,7 @@ bool FileSystem::alloc_inode(ext2_inode** inode, uint32_t* index, bool dir) {
   // allocated by block group
   for (auto bg : block_groups_) {
     if (bg.second->get_desc()->bg_free_inodes_count) {
-      if (bg.second->alloc_inode(inode, index, dir)) {
+      if (bg.second->alloc_inode(inode, index, mode)) {
         inode_init(*inode);
         block_group_index = bg.first;
         goto alloc_finished;
@@ -485,7 +548,7 @@ bool FileSystem::alloc_inode(ext2_inode** inode, uint32_t* index, bool dir) {
 
   // create a new block group
   alloc_block_group(&block_group_index);
-  if (block_groups_[block_group_index]->alloc_inode(inode, index, dir))
+  if (block_groups_[block_group_index]->alloc_inode(inode, index, mode))
     goto alloc_finished;
 
   WARNING("Allocate inode in the new block group(%u) failed",

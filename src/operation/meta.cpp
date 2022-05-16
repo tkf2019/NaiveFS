@@ -8,14 +8,8 @@ int fuse_create(const char* path, mode_t mode, struct fuse_file_info* fi) {
 
   ext2_inode* inode;
   uint32_t inode_id;
-  RetCode ret = fs->inode_create(path, &inode, &inode_id, S_ISDIR(mode));
-  if (ret) {
-    if (ret == RetCode::FS_DUP_ERR)
-      return -EEXIST;
-    else {
-      return -EIO;
-    }
-  }
+  RetCode ret = fs->inode_create(path, &inode, &inode_id, mode);
+  if (ret) return Code2Errno(ret);
 
   INFO("Begin create: %s, inode_id: %d", path, inode_id);
   auto fd = new FileStatus;
@@ -51,9 +45,8 @@ int fuse_open(const char* path, struct fuse_file_info* fi) {
 
   ext2_inode* inode;
   uint32_t inode_id;
-  if (fs->inode_lookup(path, &inode, &inode_id)) {
-    return -ENOENT;
-  }
+  RetCode ret = fs->inode_lookup(path, &inode, &inode_id);
+  if (ret) return Code2Errno(ret);
 
   auto fd = new FileStatus;
   fd->cache_update_flag_ = false;
@@ -74,14 +67,30 @@ int fuse_truncate(const char* path, off_t offset, struct fuse_file_info* fi) {
   return 0;
 }
 
-int fuse_link(const char* src, const char* path) {
-  INFO("LINK %s,%s", src, path);
+int fuse_link(const char* src, const char* dst) {
+  INFO("LINK %s,%s", src, dst);
+
+  RetCode link_ret = fs->inode_link(src, dst);
+  if (link_ret) return Code2Errno(link_ret);
 
   return 0;
 }
 
 int fuse_unlink(const char* path) {
   INFO("UNLINK %s", path);
+
+  return 0;
+}
+
+int fuse_access(const char* path, int) {
+  INFO("ACCESS %s", path);
+
+  return 0;
+}
+
+int fuse_utimens(const char* path, const struct timespec tv[2],
+                 struct fuse_file_info* fi) {
+  INFO("UTIMENS %s", path);
 
   return 0;
 }

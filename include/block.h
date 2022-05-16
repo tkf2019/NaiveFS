@@ -196,12 +196,12 @@ class DentryBlock {
   std::vector<ext2_dir_entry_2*>* get() { return &dentries_; }
 
   ext2_dir_entry_2* alloc_dentry(const char* name, size_t name_len,
-                                 uint32_t inode, bool dir) {
+                                 uint32_t inode, mode_t mode) {
     ext2_dir_entry_2* dentry = (ext2_dir_entry_2*)(block_->get() + size_);
     dentry->inode = inode;
     dentry->name_len = name_len;
     dentry->rec_len = sizeof(ext2_dir_entry_2) + name_len;
-    dentry->file_type = dir ? DENTRY_DIR : DENTRY_REG;
+    dentry->file_type = mode >> 12;
     strncpy(dentry->name, name, name_len);
     dentries_.push_back(dentry);
     return dentry;
@@ -229,7 +229,7 @@ class BlockGroup {
 
   bool get_block(uint32_t index, Block** block);
 
-  bool alloc_inode(ext2_inode** inode, uint32_t* index, bool dir);
+  bool alloc_inode(ext2_inode** inode, uint32_t* index, mode_t mode);
 
   bool alloc_block(Block** block, uint32_t* index);
 

@@ -127,22 +127,18 @@ bool BlockGroup::get_block(uint32_t index, Block** block) {
   return true;
 }
 
-bool BlockGroup::alloc_inode(ext2_inode** inode, uint32_t* index, bool dir) {
+bool BlockGroup::alloc_inode(ext2_inode** inode, uint32_t* index, mode_t mode) {
   int ret = inode_bitmap_->alloc_new();
   if (ret == -1) return false;
 
   // update block group descriptor
   desc_->bg_free_inodes_count--;
-  if (dir) desc_->bg_used_dirs_count++;
+  if (S_ISDIR(mode)) desc_->bg_used_dirs_count++;
 
   if (index != nullptr) *index = ret;
   ret = get_inode(ret, inode);
   memset((void*)(*inode), 0, sizeof(ext2_inode));
-  if (dir) {
-    (*inode)->i_mode |= S_IFDIR;
-  } else {
-    (*inode)->i_mode |= S_IFREG;
-  }
+  (*inode)->i_mode = mode;
   return ret;
 }
 
@@ -164,7 +160,7 @@ bool BlockGroup::free_inode(uint32_t index) {
   inode_bitmap_->clear(index);
   // update block group descriptor
   desc_->bg_free_inodes_count++;
-  if (S_ISDIR(inode->i_mode)) desc_->bg_used_dirs_count++;
+  if (S_ISDIR(inode->i_mode)) desc_->bg_used_dirs_count--;
   return true;
 }
 
