@@ -31,7 +31,6 @@ Naive file system based on fuse.
   - Special：
     - [x] `INIT`
     - [x] `DESTROY`
-    - [ ] `INTERRUPT`
   - Metadata:
     - [x] `OPEN`
     - [x] `CREATE`

@@ -81,6 +81,7 @@ FileSystem::~FileSystem() {
     delete bg.second;
   }
 
+  block_cache_->flush();
   delete block_cache_;
   delete dentry_cache_;
 }
@@ -283,10 +284,11 @@ RetCode FileSystem::inode_delete(uint32_t index) {
           return false;
         });
   } else {
-    visit_inode_blocks(inode, [this](uint32_t index, __attribute__((unused)) Block* block) {
-      free_block(index);
-      return false;
-    });
+    visit_inode_blocks(
+        inode, [this](uint32_t index, __attribute__((unused)) Block* block) {
+          free_block(index);
+          return false;
+        });
   }
 
   free_inode(index);
@@ -493,10 +495,10 @@ bool FileSystem::get_inode(uint32_t index, ext2_inode** inode) {
 
   // if there're 3 inode 0, 1, 2, remove 1, then 2 becomes unaccessible.
   /*
-  DEBUG("s_inodes_count: %d, index: %d", super_block_->get_super()->s_inodes_count, index);
-  if (index >= super_block_->get_super()->s_inodes_count) {
-    WARNING("Inode index exceeds inodes count");
-    return false;
+  DEBUG("s_inodes_count: %d, index: %d",
+  super_block_->get_super()->s_inodes_count, index); if (index >=
+  super_block_->get_super()->s_inodes_count) { WARNING("Inode index exceeds
+  inodes count"); return false;
   }*/
 
   // lazy read

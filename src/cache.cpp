@@ -21,6 +21,7 @@ BlockCache::~BlockCache() {
 void BlockCache::flush() {
   for (auto& node : map_) {
     if (node.second->dirty_) {
+      DEBUG("[BlockCache] Flush block %u", node.second->index_);
       node.second->block_->flush();
       node.second->dirty_ = false;
     }
@@ -83,6 +84,7 @@ void BlockCache::remove(uint32_t index) {
 
 void BlockCache::modify(uint32_t index) {
   if (map_.find(index) == map_.end()) return;
+  DEBUG("[BlockCache] Modify block %u", index);
   map_[index]->dirty_ = true;
 }
 

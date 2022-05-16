@@ -4,8 +4,8 @@
 #include <fcntl.h>
 #include <string.h>
 
-#include <vector>
 #include <cstdio>
+#include <vector>
 
 #include "common.h"
 #include "utils/logging.h"
@@ -19,6 +19,7 @@ class Path {
   Path(const char* path) : valid_(true), path_(path) {
     ASSERT(strlen(path) > 0);
     if (!SEPARATOR(path[0])) {
+      DEBUG("Invalid path!");
       valid_ = false;
       return;
     }

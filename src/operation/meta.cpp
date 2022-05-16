@@ -123,7 +123,7 @@ int fuse_rename(const char* oldname, const char* newname, unsigned int flags) {
 }
 
 int fuse_truncate(const char* path, off_t offset, struct fuse_file_info* fi) {
-  INFO("TRUNATE %s", path);
+  INFO("TRUNCATE %s", path);
   char buf[1];
   fuse_write(path, buf, 0, offset, fi);
   return 0;
