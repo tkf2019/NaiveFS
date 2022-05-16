@@ -3,9 +3,9 @@
 namespace naivefs {
 
 extern std::shared_mutex _big_lock;
-int fuse_symlink(const char *f1, const char *f2) {
+int fuse_symlink(const char *src, const char *dst) {
   std::unique_lock<std::shared_mutex> __lck(_big_lock);
-  INFO("SYMLINK %s,%s", f1, f2);
+  INFO("SYMLINK %s,%s", src, dst);
 
   ext2_inode *inode;
   RetCode ret = fs->inode_lookup(src, &inode);
@@ -30,10 +30,10 @@ int fuse_symlink(const char *f1, const char *f2) {
   return 0;
 }
 
-int fuse_readlink(const char *path, char * buf, size_t size) {
+int fuse_readlink(const char *path, char *buf, size_t size) {
   std::unique_lock<std::shared_mutex> __lck(_big_lock);
   INFO("READLINK %s", path);
-  
+
   ext2_inode *inode;
   uint32_t inode_id;
   RetCode ret = fs->inode_lookup(path, &inode, &inode_id);
