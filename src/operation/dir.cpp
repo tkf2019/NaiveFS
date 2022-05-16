@@ -69,8 +69,15 @@ int fuse_mkdir(const char *path, mode_t mode) {
 
 int fuse_rmdir(const char *path) {
   DEBUG("RMDIR %s", path);
-
-  return 0;
+  auto ret = fs->inode_delete(path);
+  if(ret) {
+    if(ret == RetCode::FS_INVALID) return -EINVAL;
+    else if(ret == RetCode::FS_TYPE_ERR) return -ENODIR;
+    else return -EIO;
+  }
+  return ret;
 }
+
+
 
 }  // namespace naivefs
