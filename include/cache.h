@@ -44,8 +44,10 @@ class BlockCache {
   }
 
   inline void release(Node* node) {
+    INFO("block cache release %d", node->index_);
     if (node->dirty_) {
       // write back modified block
+      INFO("block cache release %d dirty", node->index_);
       node->block_->flush();
       // release the memory
       delete node->block_;

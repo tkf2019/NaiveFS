@@ -8,7 +8,7 @@ extern std::shared_mutex _big_lock;
 int fuse_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
   INFO("READ %s", path);
   // TODO: locking, poll events
-  std::unique_lock<std::shared_mutex> __lck(_big_lock);
+  std::shared_lock<std::shared_mutex> __lck(_big_lock);
   if (fs == nullptr || fi == nullptr) return -EINVAL;
   auto fd = _fuse_trans_info(fi);
 
@@ -22,7 +22,7 @@ int fuse_read(const char *path, char *buf, size_t size, off_t offset, struct fus
 int fuse_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
   INFO("WRITE %s", path);
   // if returns 0, OS will consider this as EIO.
-  std::unique_lock<std::shared_mutex> __lck(_big_lock);
+  std::shared_lock<std::shared_mutex> __lck(_big_lock);
 
   if (fs == nullptr || fi == nullptr) return -EINVAL;
   auto fd = _fuse_trans_info(fi);

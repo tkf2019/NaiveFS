@@ -49,17 +49,23 @@ int fuse_mkdir(const char *path, mode_t mode) {
 
   auto ic = opm->get_cache(id);
   if (!ic) return -EIO;
+  auto current_user = fuse_get_context();
+
   ic->lock();
+  inode = ic->cache_;
   inode->i_mode = mode;
   inode->i_size = 0;
   inode->i_atime = nw_time;
   inode->i_ctime = nw_time;
   inode->i_mtime = nw_time;
   inode->i_flags = 0;  // now we don't care this
-  inode->i_gid = 0;
-  inode->i_uid = 0;
+  inode->i_gid = current_user->gid;
+  inode->i_uid = current_user->uid;
+  ic->commit();
   ic->unlock();
   opm->rel_cache(id);
+
+  
 
   INFO("MKDIR END");
 

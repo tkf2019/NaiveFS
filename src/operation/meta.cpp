@@ -40,6 +40,7 @@ int fuse_create(const char* path, mode_t mode, struct fuse_file_info* fi) {
   inode->i_flags = 0;  // now we don't care this
   inode->i_gid = current_user->gid;
   inode->i_uid = current_user->uid;
+  ic->commit();
   ic->unlock();
 
   fi->fh = reinterpret_cast<decltype(fi->fh)>(fd);

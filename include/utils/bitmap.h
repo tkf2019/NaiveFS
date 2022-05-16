@@ -10,7 +10,7 @@ namespace naivefs {
 
 #define BIT_SHIFT 5
 #define BIT_MASK 0x1f
-#define BIT_MAX ((1UL << 32) - 1)
+#define BIT_MAX (~0u)
 #define BIT_GET(__i) (1 << (__i & BIT_MASK))
 
 class Bitmap {

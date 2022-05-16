@@ -59,7 +59,11 @@ FileSystem::FileSystem()
   // init root inode
   if (!block_groups_[0]->get_inode(ROOT_INODE, &root_inode_)) {
     // alloc new root inode
-    ASSERT(block_groups_[0]->alloc_inode(&root_inode_, nullptr, S_IFDIR));
+    
+    // ASSERT(block_groups_[0]->alloc_inode(&root_inode_, nullptr, S_IFDIR));
+    auto ret =block_groups_[0]->alloc_inode(&root_inode_, nullptr, S_IFDIR);
+    // ASSERT is disabled under Release
+    ASSERT(ret);
     inode_init(root_inode_);
     // root directory: cannot be written or executed
     root_inode_->i_mode =
