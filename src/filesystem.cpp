@@ -172,6 +172,7 @@ RetCode FileSystem::inode_lookup(const Path& path, ext2_inode** inode,
   *inode = root_inode_;
   if (path.empty()) {
     if (inode_index != nullptr) *inode_index = ROOT_INODE;
+    if (cache_ptr != nullptr) *cache_ptr = nullptr;
     return FS_SUCCESS;
   }
   DentryCache::Node* link = nullptr;
@@ -779,7 +780,6 @@ bool FileSystem::alloc_block_group(uint32_t* index) {
 }
 
 bool FileSystem::free_inode(uint32_t index) {
-  DEBUG("Free %i", index);
   // update super block
   super_block_->get_super()->s_free_inodes_count++;
   super_block_->get_super()->s_inodes_count--;

@@ -40,8 +40,9 @@ class Path {
 
   Path(const Path& path, size_t slice)
       : valid_(path.valid_), path_(path.path_) {
-    name_list_ = std::vector<std::pair<const char*, size_t>>(
-        path.name_list_.begin(), path.name_list_.begin() + slice);
+    if (slice > 0)
+      name_list_ = std::vector<std::pair<const char*, size_t>>(
+          path.name_list_.begin(), path.name_list_.begin() + slice);
   }
 
   auto begin() const noexcept { return name_list_.begin(); }

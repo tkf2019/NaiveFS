@@ -97,6 +97,7 @@ void test_filesystem() {
   INFO("%d", fs->inode_lookup("/home/test2.txt", &test2_inode));
   INFO("%d", fs->inode_create("/home/test2.txt", &test2_inode, S_IFREG));
   INFO("%d", fs->inode_create("/home/tmp2", &home2_inode, S_IFDIR));
+  INFO("%d", fs->inode_unlink("/home"));
   // for (int i = 0; i < 4096; ++i) {
   //   ext2_inode *dir;
   //   fs->inode_create((std::string("/home/dir") +
