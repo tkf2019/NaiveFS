@@ -27,8 +27,8 @@ int fuse_write(const char *path, const char *buf, size_t size, off_t offset,
   auto fd = _fuse_trans_info(fi);
 
   // File handle is not valid.
-  if (!fd) return -EINVAL;
-  if ((fi->flags & O_ACCMODE) == O_RDONLY) return -EINVAL;
+  if (!fd) return -EBADF;
+  if ((fi->flags & O_ACCMODE) == O_RDONLY) return -EACCES;
   if (!size) return 0;
 
   return (fi->flags & O_APPEND) ? fd->append(buf, offset, size)

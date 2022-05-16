@@ -79,6 +79,21 @@ int fuse_link(const char* src, const char* dst) {
 int fuse_unlink(const char* path) {
   INFO("UNLINK %s", path);
 
+  ext2_inode* inode;
+  uint32_t inode_id;
+  RetCode ret = fs->inode_lookup(path, &inode, &inode_id);
+  if (ret) return Code2Errno(ret);
+
+  auto ic = opm->get_cache(inode_id);
+  ic->lock();
+  if(ic->cnts_ >= 2) {
+    ic->unlock();
+    opm->rel_cache(inode_id);
+    return -EACCES;
+  }
+  RetCode ret = fs->inode_delete(path);
+  ic->unlock();
+  if (ret) return Code2Errno(ret);
   return 0;
 }
 
@@ -94,5 +109,38 @@ int fuse_utimens(const char* path, const struct timespec tv[2],
 
   return 0;
 }
+
+int fuse_release(const char * path, struct fuse_file_info * fi) {
+  (void) path;
+  if (fs == nullptr || fi == nullptr) return -EINVAL;
+  auto fd = _fuse_trans_info(fi);
+
+  // File handle is not valid.
+  if (!fd) return -EBADF;
+  if ((fi->flags & O_ACCMODE) == O_RDONLY) return -EACCES;
+
+  auto id = fd->inode_cache_->inode_id_;
+  delete fd;
+  opm->rel_cache(id);
+  return 0;
+}
+
+int fuse_fsync(const char * path, int datasync, struct fuse_file_info * fi) {
+  if (fs == nullptr || fi == nullptr || !path) return -EINVAL;
+  auto fd = _fuse_trans_info(fi);
+  if (!fd) return -EBADF;
+
+  if(datasync) {
+    fs->flush();
+  } else {
+    fd->inode_cache_->lock_shared();
+    fd->inode_cache_->commit();
+    fd->inode_cache_->unlock_shared();
+    fs->flush();
+  }
+  return 0;
+}
+
+
 
 }  // namespace naivefs

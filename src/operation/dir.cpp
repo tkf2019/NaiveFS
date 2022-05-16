@@ -61,6 +61,19 @@ int fuse_mkdir(const char *path, mode_t mode) {
 
 int fuse_rmdir(const char *path) {
   DEBUG("RMDIR %s", path);
+  ext2_inode *parent;
+  uint32_t inode_id;
+  if (fs->inode_lookup(path, &parent, &inode_id)) return -ENOENT;
+  if (!S_ISDIR(parent->i_mode)) return -ENOTDIR;
+  bool result = true;
+  fs->visit_inode_blocks(parent, [&result](uint32_t index, Block *block) {
+    DentryBlock dentry_block(block);
+    for (const auto &dentry : *dentry_block.get()) {
+      if (dentry->name_len) { result = false; return true; }
+    }
+    return false;
+  });
+  if(!result) return -ENOTEMPTY;
   auto ret = fs->inode_delete(path);
   if (ret) {
     return Code2Errno(ret);

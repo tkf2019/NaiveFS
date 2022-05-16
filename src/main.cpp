@@ -139,6 +139,8 @@ int main(int argc, char *argv[]) {
   ops.destroy = naivefs::fuse_destroy;
   ops.rename = naivefs::fuse_rename;
   ops.access = naivefs::fuse_access;
+  ops.release = naivefs::fuse_release;
+  ops.fsync = naivefs::fuse_fsync;
   ret = fuse_main(args.argc, args.argv, &ops, NULL);
   fuse_opt_free_args(&args);
   return ret;
