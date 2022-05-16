@@ -32,8 +32,8 @@ int fuse_getattr(const char *path, struct stat *stbuf,
   stbuf->st_atime = inode->i_atime;    // access time
   stbuf->st_mtime = inode->i_mtime;    // modify time
   stbuf->st_ctime = inode->i_ctime;    // change time
-
   ic->unlock_shared();
+  opm->rel_cache(inode_id);
   INFO("GETATTR END");
 
   return 0;

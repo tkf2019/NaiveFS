@@ -76,7 +76,7 @@ int fuse_rmdir(const char *path) {
     return false;
   });
   if(!result) return -ENOTEMPTY;
-  auto ret = fs->inode_delete(path);
+  auto ret = fs->inode_unlink(path);
   if (ret) {
     return Code2Errno(ret);
   }

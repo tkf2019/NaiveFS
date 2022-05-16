@@ -109,6 +109,7 @@ class InodeCache {
   bool init() { return copy() == 0; }
   void upd_all();
   void del(FSListPtr<FileStatus*>* ptr) {vec.del(ptr);}
+  FSListPtr<FileStatus*>* ins(FileStatus* ptr) {return vec.ins(ptr);}
   int commit() {
     ext2_inode *inode;
     if (!fs->get_inode(inode_id_, &inode)) return -EIO;
@@ -146,6 +147,8 @@ class FileStatus {
     memset(indirect_block_, 0, sizeof(indirect_block_));
   }
   ~FileStatus() {
+    INFO("~FileStatus");
+    ASSERT(fslist_ptr_ != nullptr);
     inode_cache_->lock();
     inode_cache_->del(fslist_ptr_);
     inode_cache_->unlock();
@@ -276,10 +279,14 @@ class OpManager {
     if (it == st_.end()) return 0;
     it->second->lock();
     if(!--it->second->cnts_) {
+      INFO("rel cache success");
       ret = it->second->commit();
       it->second->unlock();
       delete it->second;
       st_.erase(it);
+    } else {
+      INFO("rel cache: cache cnts %d", it->second->cnts_);
+      it->second->unlock();
     }
     INFO("rel cache returns %d", ret);
     return ret;
