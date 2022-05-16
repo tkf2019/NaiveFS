@@ -36,16 +36,12 @@ int fuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 int fuse_mkdir(const char *path, mode_t mode) {
   INFO("MKDIR: %s", path);
   mode |= S_IFDIR;
+
   ext2_inode *inode;
   uint32_t id;
-  auto ret = fs->inode_create(path, &inode, &id, true);
-  if (ret) {
-    if (ret == RetCode::FS_DUP_ERR)
-      return -EEXIST;
-    else {
-      return -EIO;
-    }
-  }
+  auto ret = fs->inode_create(path, &inode, &id, mode);
+  if (ret) return Code2Errno(ret);
+  
   uint32_t nw_time = time(0);
 
   auto ic = opm->get_cache(id);

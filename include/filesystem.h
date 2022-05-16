@@ -28,19 +28,39 @@ class FileSystem {
    * Create a new inode
    */
   RetCode inode_create(const Path& path, ext2_inode** inode,
-                       uint32_t* inode_index_result, bool dir);
+                       uint32_t* inode_index_result, mode_t mode);
 
-  RetCode inode_create(const Path& path, ext2_inode** inode, bool dir) {
+  RetCode inode_create(const Path& path, ext2_inode** inode, mode_t mode) {
     uint32_t _;
-    return inode_create(path, inode, &_, dir);
+    return inode_create(path, inode, &_, mode);
   }
 
   /**
-   * Lookup inode by given path
+   * @brief Create a new dentry, appending the dentry data to the last block of
+   * parent inode. If the last block is full, we will allocate a new block for
+   * the parent.
+   */
+  RetCode dentry_create(Block* last_block, uint32_t last_block_index,
+                        ext2_inode* parent, const char* name, size_t name_len,
+                        uint32_t inode_index, mode_t mode);
+
+  /**
+   * Lookup inode by given path.
+   * If we find a symbolic inode, lookup the target path to finally return the
+   * real inode.
    */
   RetCode inode_lookup(const Path& path, ext2_inode** inode,
                        uint32_t* inode_index = nullptr,
                        DentryCache::Node** cache_ptr = nullptr);
+
+  /**
+   * @brief  Lookup inode by given parent. Parent should not be nullptr.
+   */
+  RetCode inode_lookup(ext2_inode* parent, const char* name, size_t name_len,
+                       bool* name_exists = nullptr,
+                       uint32_t* inode_index = nullptr,
+                       Block** last_block = nullptr,
+                       uint32_t* last_block_index = nullptr);
 
   /**
    * @brief Delete an existing inode. We need to release the data held by dentry
@@ -53,6 +73,18 @@ class FileSystem {
    * @brief Delete an existing inode by recursion
    */
   RetCode inode_delete(uint32_t inode_index);
+
+  /**
+   * @brief Unlink an existing inode (delete the inode when i_links equal to 0)
+   */
+  RetCode inode_unlink(const Path& path);
+
+  /**
+   * @brief Create a new dentry by destination path and link the dentry to the
+   * inode pointed by source dentry. Cannot create dentry when the destination
+   * file already exists or the source file does not exist.
+   */
+  RetCode inode_link(const Path& src, const Path& dst);
 
   /**
    * @brief Visit inode blocks
@@ -93,10 +125,9 @@ class FileSystem {
    *
    * @param inode new inode allocated
    * @param index returns inode index
-   * @param dir if the inode to allocate is a directory inode
    * @return @return true always true (we assume disk space will not ne used up)
    */
-  bool alloc_inode(ext2_inode** inode, uint32_t* index, bool dir);
+  bool alloc_inode(ext2_inode** inode, uint32_t* index, mode_t mode);
 
   /**
    * @brief Allocate a new block in the file system. This operation changes: 1.

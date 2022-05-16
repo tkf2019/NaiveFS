@@ -74,9 +74,29 @@ enum RetCode {
   FS_ALLOC_ERR,      // allocation error
   FS_DUP_ERR,        // duplication error
   FS_NULL_ERR,       // null pointer detected
-  FS_TYPE_ERR,       // file type error
+  FS_NDIR_ERR,       // not a directory
+  FS_DIR_ERR,        // directory
   FS_INVALID         // invalid argument
 };
+
+inline int Code2Errno(RetCode code) {
+  switch (code) {
+    case FS_NOT_FOUND:
+      return -ENOENT;
+    case FS_ALLOC_ERR:
+      return -EIO;
+    case FS_DUP_ERR:
+      return -EEXIST;
+    case FS_NULL_ERR:
+      return -EFAULT;
+    case FS_NDIR_ERR:
+      return -ENOTDIR;
+    case FS_DIR_ERR:
+      return -EISDIR;
+    case FS_INVALID:
+      return -EINVAL;
+  }
+}
 }  // namespace naivefs
 
 #endif
