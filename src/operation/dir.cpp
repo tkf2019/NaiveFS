@@ -36,8 +36,34 @@ int fuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 int fuse_mkdir(const char *path, mode_t mode) {
   INFO("MKDIR: %s", path);
   mode |= S_IFDIR;
-  ext2_inode *_;
-  if (fs->inode_create(path, &_, true)) return -EINVAL;
+  ext2_inode *inode;
+  uint32_t id;
+  auto ret = fs->inode_create(path, &inode, &id, true);
+  if (ret) {
+    if (ret == RetCode::FS_DUP_ERR)
+      return -EEXIST;
+    else {
+      return -EIO;
+    }
+  }
+  uint32_t nw_time = time(0);
+
+  auto ic = opm->get_cache(id);
+  if (!ic) return -EIO;
+  ic->lock();
+  inode->i_mode = mode;
+  inode->i_size = 0;
+  inode->i_atime = nw_time;
+  inode->i_ctime = nw_time;
+  inode->i_mtime = nw_time;
+  inode->i_flags = 0;  // now we don't care this
+  inode->i_gid = 0;
+  inode->i_uid = 0;
+  ic->unlock();
+  opm->rel_cache(id);
+
+  INFO("MKDIR END");
+
   return 0;
 }
 

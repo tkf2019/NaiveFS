@@ -21,6 +21,7 @@ int fuse_read(const char *path, char *buf, size_t size, off_t offset,
 int fuse_write(const char *path, const char *buf, size_t size, off_t offset,
                struct fuse_file_info *fi) {
   INFO("WRITE %s", path);
+  // if returns 0, OS will consider this as EIO.
 
   if (fs == nullptr || fi == nullptr) return -EINVAL;
   auto fd = _fuse_trans_info(fi);

@@ -34,6 +34,7 @@ int fuse_getattr(const char *path, struct stat *stbuf,
   stbuf->st_ctime = inode->i_ctime;    // change time
 
   ic->unlock_shared();
+  INFO("GETATTR END");
 
   return 0;
 }

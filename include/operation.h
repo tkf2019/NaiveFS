@@ -39,36 +39,82 @@ extern FileSystem *fs;
 constexpr uint32_t IBLOCK_11 = 11;
 constexpr uint32_t IBLOCK_12 = BLOCK_SIZE / 4 + 11;
 constexpr uint32_t IBLOCK_13 = (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) + IBLOCK_12;
-constexpr uint32_t IBLOCK_14 =
-    (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) +
-    IBLOCK_13;  // 1074791436
+constexpr uint32_t IBLOCK_14 = (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) + IBLOCK_13;  // 1074791436
+
+template <typename T>
+class FSListPtr {
+ public:
+  T value_;
+  FSListPtr<T> *prev_;
+  FSListPtr<T> *next_;
+  FSListPtr() : value_() { prev_ = next_ = nullptr; }
+  FSListPtr(const T &value) : value_(value) { prev_ = next_ = nullptr; }
+};
+
+// not thread-safe
+template <typename T>
+class FSList {
+ public:
+  FSListPtr<T> *head_;
+  FSList() { head_ = new FSListPtr<T>(); }
+  ~FSList() {
+    for (auto nxt = head_->next_;; nxt = nxt->next_) {
+      delete head_;
+      head_ = nxt;
+      if (nxt == nullptr) break;
+    }
+  }
+  FSListPtr<T> *ins(const T &value) {
+    auto nw = new FSListPtr<T>(value);
+    nw->prev_ = head_;
+    nw->next_ = head_->next_;
+    head_->next_ = nw;
+    return nw;
+  }
+  void iter(const std::function<void(T &)>& func) {
+    for (auto nxt = head_->next_; nxt; nxt = nxt->next_) func(nxt->value_);
+  }
+  void del(FSListPtr<T> *ptr) {
+    if (ptr->next_) ptr->next_->prev_ = ptr->prev_;
+    ptr->prev_->next_ = ptr->next_;
+    delete ptr;
+  }
+  int empty() {
+    return head_->next == nullptr;
+  }
+};
 
 class FileStatus;
 class InodeCache {
  public:
   uint32_t inode_id_;               // this inode
-  ext2_inode *cache_;               // cache of the inode
+  uint32_t cnts_;
+  ext2_inode cache_[1];             // cache of the inode
   std::shared_mutex inode_rwlock_;  // if a file is opened by many processes, we
                                     // use this to ensure atomicity.
-  std::vector<FileStatus *>
-      vec;  // when inode cache is changed in a critical section, other process
-            // must update their cache.
-  explicit InodeCache(uint32_t inode_id) : inode_id_(inode_id) {
-    cache_ = new ext2_inode;
-  }
-  ~InodeCache() { delete cache_; }
+  FSList<FileStatus*> vec;                       // when inode cache is changed in a critical section, other process
+                                    // must update their cache.
+  explicit InodeCache(uint32_t inode_id) : inode_id_(inode_id) { cnts_ = 0; }
+  ~InodeCache() {}
   void lock_shared() { inode_rwlock_.lock_shared(); }
   void unlock_shared() { inode_rwlock_.unlock_shared(); }
   void lock() { inode_rwlock_.lock(); }
   void unlock() { inode_rwlock_.unlock(); }
   int copy() {
     ext2_inode *inode;
-    if (!fs->get_inode(inode_id_, &inode)) return -EINVAL;
+    if (!fs->get_inode(inode_id_, &inode)) return -EIO;
     memcpy(cache_, inode, sizeof(ext2_inode));
     return 0;
   }
   bool init() { return copy() == 0; }
   void upd_all();
+  void del(FSListPtr<FileStatus*>* ptr) {vec.del(ptr);}
+  int commit() {
+    ext2_inode *inode;
+    if (!fs->get_inode(inode_id_, &inode)) return -EIO;
+    memcpy(inode, cache_, sizeof(ext2_inode));
+    return 0;
+  }
 };
 
 class FileStatus {
@@ -84,24 +130,28 @@ class FileStatus {
       block_id = (reinterpret_cast<uint32_t *>(blk->get()))[off];
       return true;
     }
-    bool set(off_t off, uint32_t block_id) {
-      Block *blk;
-      if (!fs->get_block(id_, &blk)) return false;
-      block_id = (reinterpret_cast<uint32_t *>(blk->get()))[off];
-      return true;
-    }
   };
   InodeCache *inode_cache_;
+  FSListPtr<FileStatus*>* fslist_ptr_;
   bool cache_update_flag_;
-  uint32_t block_id_;          // current block
-  uint32_t block_id_in_file_;  // i.e. current offset / BLOCK_SIZE
-  IndirectBlockPtr
-      indirect_block_[3];  // if indirect_blocks are using, we record each level
-  std::shared_mutex rwlock;  // lock the FileStatus itself.
-  bool is_one_block(off_t off) { return off / BLOCK_SIZE == block_id_in_file_; }
-  bool check_size(off_t off, size_t counts) {
-    return counts + off > (size_t)inode_cache_->cache_->i_size;
+  uint32_t block_id_;                   // current block
+  uint32_t block_id_in_file_;           // i.e. current offset / BLOCK_SIZE
+  IndirectBlockPtr indirect_block_[3];  // if indirect_blocks are using, we record each level
+  std::shared_mutex rwlock;             // lock the FileStatus itself.
+  FileStatus() {
+    inode_cache_ = nullptr;
+    cache_update_flag_ = false;
+    block_id_ = 0;
+    block_id_in_file_ = 0;
+    memset(indirect_block_, 0, sizeof(indirect_block_));
   }
+  ~FileStatus() {
+    inode_cache_->lock();
+    inode_cache_->del(fslist_ptr_);
+    inode_cache_->unlock();
+  }
+  bool is_one_block(off_t off) { return off / BLOCK_SIZE == block_id_in_file_; }
+  bool check_size(off_t off, size_t counts) { return counts + off > (size_t)inode_cache_->cache_->i_size; }
   size_t file_size() { return inode_cache_->cache_->i_size; }
 
   /**
@@ -172,12 +222,9 @@ class FileStatus {
    * @param size
    * @return int
    */
-  int write(const char *buf, size_t offset, size_t size,
-            bool append_flag = false);
+  int write(const char *buf, size_t offset, size_t size, bool append_flag = false);
 
-  int append(const char *buf, size_t offset, size_t size) {
-    return write(buf, offset, size, true);
-  }
+  int append(const char *buf, size_t offset, size_t size) { return write(buf, offset, size, true); }
 };
 
 class OpManager {
@@ -202,23 +249,40 @@ class OpManager {
         delete ic;
         return nullptr;
       }
-      if (S_ISDIR(ic->cache_->i_mode)) {
-        return ic;
-      }
       st_[inode_id] = ic;
     }
-    return st_[inode_id];
+    auto ret = st_[inode_id];
+    ret->cnts_++;
+    return ret;
   }
   /**
-   * @brief update the vector in the cache object
+   * @brief update the list in the cache object
    *
    * @param fd
    * @param inode_id
    */
   void upd_cache(FileStatus *fd, uint32_t inode_id) {
     std::unique_lock<std::shared_mutex> lck(m_);
-    if (!st_.count(inode_id)) return;
-    st_[inode_id]->vec.push_back(fd);
+    auto it = st_.find(inode_id);
+    if (it == st_.end()) return;
+    std::unique_lock<std::shared_mutex> lck_ic(it->second->inode_rwlock_);
+    it->second->vec.ins(fd);
+  }
+
+  int rel_cache(uint32_t inode_id) {
+    std::unique_lock<std::shared_mutex> lck(m_);
+    auto it = st_.find(inode_id);
+    int ret = 0;
+    if (it == st_.end()) return 0;
+    it->second->lock();
+    if(!--it->second->cnts_) {
+      ret = it->second->commit();
+      it->second->unlock();
+      delete it->second;
+      st_.erase(it);
+    }
+    INFO("rel cache returns %d", ret);
+    return ret;
   }
 
  private:
@@ -409,8 +473,7 @@ int fuse_read(const char *, char *, size_t, off_t, struct fuse_file_info *);
  * Unless FUSE_CAP_HANDLE_KILLPRIV is disabled, this method is
  * expected to reset the setuid and setgid bits.
  */
-int fuse_write(const char *, const char *, size_t, off_t,
-               struct fuse_file_info *);
+int fuse_write(const char *, const char *, size_t, off_t, struct fuse_file_info *);
 
 /** Get file system statistics
  *
@@ -514,8 +577,7 @@ int fuse_opendir(const char *, struct fuse_file_info *);
  * used. The other fields are ignored when FUSE_READDIR_PLUS is not
  * set.
  */
-int fuse_readdir(const char *, void *, fuse_fill_dir_t, off_t,
-                 struct fuse_file_info *, enum fuse_readdir_flags);
+int fuse_readdir(const char *, void *, fuse_fill_dir_t, off_t, struct fuse_file_info *, enum fuse_readdir_flags);
 
 /** Release directory
  *
@@ -618,8 +680,7 @@ int fuse_lock(const char *, struct fuse_file_info *, int cmd, struct flock *);
  *
  * See the utimensat(2) man page for details.
  */
-int fuse_utimens(const char *, const struct timespec tv[2],
-                 struct fuse_file_info *fi);
+int fuse_utimens(const char *, const struct timespec tv[2], struct fuse_file_info *fi);
 
 /**
  * Map block index within file to block index within device
@@ -630,8 +691,7 @@ int fuse_utimens(const char *, const struct timespec tv[2],
 int fuse_bmap(const char *, size_t blocksize, uint64_t *idx);
 
 #if FUSE_USE_VERSION < 35
-int fuse_ioctl(const char *, int cmd, void *arg, struct fuse_file_info *,
-               unsigned int flags, void *data);
+int fuse_ioctl(const char *, int cmd, void *arg, struct fuse_file_info *, unsigned int flags, void *data);
 #else
 /**
  * Ioctl
@@ -649,8 +709,7 @@ int fuse_ioctl(const char *, int cmd, void *arg, struct fuse_file_info *,
  * Note : the unsigned long request submitted by the application
  * is truncated to 32 bits.
  */
-int (*ioctl)(const char *, unsigned int cmd, void *arg, struct fuse_file_info *,
-             unsigned int flags, void *data);
+int (*ioctl)(const char *, unsigned int cmd, void *arg, struct fuse_file_info *, unsigned int flags, void *data);
 #endif
 
 /**
@@ -668,8 +727,7 @@ int (*ioctl)(const char *, unsigned int cmd, void *arg, struct fuse_file_info *,
  * The callee is responsible for destroying ph with
  * fuse_pollhandle_destroy() when no longer in use.
  */
-int fuse_poll(const char *, struct fuse_file_info *, struct fuse_pollhandle *ph,
-              unsigned *reventsp);
+int fuse_poll(const char *, struct fuse_file_info *, struct fuse_pollhandle *ph, unsigned *reventsp);
 
 /** Write contents of buffer to an open file
  *
@@ -680,8 +738,7 @@ int fuse_poll(const char *, struct fuse_file_info *, struct fuse_pollhandle *ph,
  * Unless FUSE_CAP_HANDLE_KILLPRIV is disabled, this method is
  * expected to reset the setuid and setgid bits.
  */
-int fuse_write_buf(const char *, struct fuse_bufvec *buf, off_t off,
-                   struct fuse_file_info *);
+int fuse_write_buf(const char *, struct fuse_bufvec *buf, off_t off, struct fuse_file_info *);
 
 /** Store data from an open file in a buffer
  *
@@ -697,8 +754,7 @@ int fuse_write_buf(const char *, struct fuse_bufvec *buf, off_t off,
  * regions, they too must be allocated using malloc().  The
  * allocated memory will be freed by the caller.
  */
-int fuse_read_buf(const char *, struct fuse_bufvec **bufp, size_t size,
-                  off_t off, struct fuse_file_info *);
+int fuse_read_buf(const char *, struct fuse_bufvec **bufp, size_t size, off_t off, struct fuse_file_info *);
 /**
  * Perform BSD file locking operation
  *
@@ -741,10 +797,8 @@ int fuse_fallocate(const char *, int, off_t, off_t, struct fuse_file_info *);
  * emulation automatically, but the emulation has been removed from all
  * glibc release branches.)
  */
-ssize_t fuse_copy_file_range(const char *path_in, struct fuse_file_info *fi_in,
-                             off_t offset_in, const char *path_out,
-                             struct fuse_file_info *fi_out, off_t offset_out,
-                             size_t size, int flags);
+ssize_t fuse_copy_file_range(const char *path_in, struct fuse_file_info *fi_in, off_t offset_in, const char *path_out, struct fuse_file_info *fi_out,
+                             off_t offset_out, size_t size, int flags);
 
 /**
  * Find next data or hole after the specified offset
