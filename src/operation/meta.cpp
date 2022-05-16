@@ -177,11 +177,12 @@ int fuse_access(const char* path, int mode) {
   std::unique_lock<std::shared_mutex> __lck(_big_lock);
   INFO("ACCESS %s", path);
   ext2_inode* inode;
-  int32_t inode_id;
+  uint32_t inode_id;
   RetCode ret = fs->inode_lookup(path, &inode, &inode_id);
   if(ret) return Code2Errno(ret);
   if(mode == F_OK) return 0;
-  return _check_permission(inode->i_mode, mode & R_OK, mode & W_OK, mode & X_OK, inode->i_gid, inode->i_uid);
+  if(!_check_permission(inode->i_mode, mode & R_OK, mode & W_OK, mode & X_OK, inode->i_gid, inode->i_uid)) return -EACCES;
+  return 0;
 }
 
 int fuse_utimens(const char* path, const struct timespec tv[2], struct fuse_file_info* fi) {
