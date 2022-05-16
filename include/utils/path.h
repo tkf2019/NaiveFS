@@ -17,6 +17,10 @@ class Path {
  public:
   Path(const char* path) : valid_(true), path_(path) {
     ASSERT(strlen(path) > 0);
+    if (!SEPARATOR(path[0])) {
+      valid_ = false;
+      return;
+    }
     const char* ptr = path_;
     off_t curr_off = 0;
     while (*ptr != '\0') {
@@ -55,7 +59,10 @@ class Path {
   inline bool valid() const noexcept { return valid_; }
 
   inline auto back() const noexcept {
-    return name_list_[name_list_.size() - 1];
+    if (name_list_.size() >= 1)
+      return name_list_[name_list_.size() - 1];
+    else
+      return std::make_pair("", (size_t)0);
   }
 
   inline const char* path() const noexcept { return path_; }
