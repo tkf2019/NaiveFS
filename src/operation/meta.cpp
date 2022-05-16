@@ -252,6 +252,7 @@ int fuse_utimens(const char* path, const struct timespec tv[2], struct fuse_file
 
 int fuse_release(const char* path, struct fuse_file_info* fi) {
   INFO("RELEASE %s", path);
+  std::unique_lock<std::shared_mutex> __lck(_big_lock);
   if (fs == nullptr || fi == nullptr) return -EINVAL;
   auto fd = _fuse_trans_info(fi);
 
@@ -266,6 +267,7 @@ int fuse_release(const char* path, struct fuse_file_info* fi) {
 
 int fuse_fsync(const char* path, int datasync, struct fuse_file_info* fi) {
   DEBUG("FSYNC %s", path);
+  std::unique_lock<std::shared_mutex> __lck(_big_lock);
   if (fs == nullptr || fi == nullptr || !path) return -EINVAL;
   auto fd = _fuse_trans_info(fi);
   if (!fd) return -EBADF;

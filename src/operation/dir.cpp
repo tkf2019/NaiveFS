@@ -7,6 +7,7 @@ namespace naivefs {
 extern std::shared_mutex _big_lock;
 int fuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi, enum fuse_readdir_flags flags) {
   std::unique_lock<std::shared_mutex> __lck(_big_lock);
+  // TODO: readdir can be thread-safe
   (void)offset;
   (void)fi;
   (void)flags;
@@ -94,7 +95,7 @@ int fuse_rmdir(const char *path) {
 
 
 int fuse_opendir(const char * path, struct fuse_file_info * fi) {
-
+  return 0;
 }
 
 

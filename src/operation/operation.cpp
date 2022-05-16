@@ -138,19 +138,19 @@ int FileStatus::copy_to_buf(char* buf, size_t offset, size_t size) {
   _err_ret = seek(offset / BLOCK_SIZE);
   if (_err_ret) return _err_ret;
   Block* blk;
-  if (!fs->get_block(block_id_, &blk)) return -EINVAL;
   size_t ret = 0;
   size_t csz = std::min(size, BLOCK_SIZE - (size_t)offset % BLOCK_SIZE);
-  memcpy(buf, blk->get() + offset % BLOCK_SIZE, csz);
+  if (!fs->get_block(block_id_, &blk, false, offset % BLOCK_SIZE, buf, csz)) return -EINVAL;
+  // memcpy(buf, blk->get());
   ret += csz, size -= csz, offset += csz, buf += csz;
   INFO("copy_to_buf: ret: %llu, size: %llu, offset: %llu", ret, size, offset);
   while (size) {
     if (offset >= isize) return ret;
     _err_ret = next_block();
-    if (_err_ret) return _err_ret;
-    if (!fs->get_block(block_id_, &blk)) return -EINVAL;
     csz = std::min(size, std::min((size_t)isize - (size_t)offset, (size_t)BLOCK_SIZE));
-    memcpy(buf, blk->get(), csz);
+    if (_err_ret) return _err_ret;
+    if (!fs->get_block(block_id_, &blk, false, 0, buf, csz)) return -EINVAL;
+    // memcpy(buf, blk->get(), csz);
     ret += csz, size -= csz, offset += csz, buf += csz;
   }
   return ret;
@@ -196,41 +196,45 @@ int FileStatus::write(const char* buf, size_t offset, size_t size, bool append_f
     if (_err_ret) return _err_ret;
     INFO("write: seek success");
 
-    if (!fs->get_block(block_id_, &blk)) return -EINVAL;
+    // write is dirty
+    // since get_block...memcpy(blk->get()) is not atomic (but we can assume this when the number of threads is small, and cache is big although),
     size_t ret = 0;
     size_t csz = std::min(size, BLOCK_SIZE - (size_t)offset % BLOCK_SIZE);
-    memcpy(blk->get() + offset % BLOCK_SIZE, buf + ret, csz);
+    if (!fs->get_block(block_id_, &blk, true, offset % BLOCK_SIZE, buf + ret, csz)) return -EINVAL;
+    INFO("write read first block");
     ret += csz, size -= csz, offset += csz, inode_cache_->cache_->i_size = std::max((size_t)inode_cache_->cache_->i_size, (size_t)offset);
 
     while (size) {
+      csz = std::min(size, (size_t)BLOCK_SIZE);
       if (offset >= inode_cache_->cache_->i_size) {
         INFO("write: need allocation");
         uint32_t _;
         if (!fs->alloc_block(&blk, &_, inode_cache_->cache_)) return ret;
         if (next_block()) {
-          INFO("write: EIO");
+          WARNING("write: EIO");
           return -EIO;
         }
-        if (!fs->get_block(block_id_, &blk)) {
-          INFO("write: EIO");
+        if (!fs->get_block(block_id_, &blk, true, 0, buf + ret, csz)) {
+          WARNING("write: EIO");
           return -EIO;
         }
       } else {
         INFO("write: don't need allocation");
         if (next_block()) {
-          INFO("write: EIO");
+          WARNING("write: EIO");
           return -EIO;
         }
-        if (!fs->get_block(block_id_, &blk)) {
-          INFO("write: EIO");
+        if (!fs->get_block(block_id_, &blk, true, 0, buf + ret, csz)) {
+          WARNING("write: EIO");
           return -EIO;
         }
       }
-      csz = std::min(size, (size_t)BLOCK_SIZE);
-      memcpy(blk->get(), buf + ret, csz);
+      // memcpy(blk->get(), buf + ret, csz);
+      INFO("write read blocks");
       ret += csz, size -= csz, offset += csz, inode_cache_->cache_->i_size = std::max((size_t)inode_cache_->cache_->i_size, (size_t)offset);
     }
 
+    INFO("write: upd_All");
     inode_cache_->upd_all();
     INFO("write: end");
 
@@ -244,15 +248,16 @@ int FileStatus::write(const char* buf, size_t offset, size_t size, bool append_f
       return _err_ret;
     }
     Block* blk;
-    if (!fs->get_block(block_id_, &blk)) {
+    size_t ret = 0;
+    size_t csz = std::min(size, BLOCK_SIZE - (size_t)offset % BLOCK_SIZE);
+    if (!fs->get_block(block_id_, &blk, true, offset % BLOCK_SIZE, buf + ret, csz)) {
       inode_cache_->unlock_shared();
       return -EINVAL;
     }
-    size_t ret = 0;
-    size_t csz = std::min(size, BLOCK_SIZE - (size_t)offset % BLOCK_SIZE);
-    memcpy(blk->get() + offset % BLOCK_SIZE, buf + ret, csz);
+    // memcpy(blk->get() + offset % BLOCK_SIZE, buf + ret, csz);
     ret += csz, size -= csz, offset += csz;
     while (size) {
+      csz = std::min(size, (size_t)BLOCK_SIZE);
       if (offset >= isize) {
         inode_cache_->unlock_shared();
         return ret;
@@ -262,12 +267,11 @@ int FileStatus::write(const char* buf, size_t offset, size_t size, bool append_f
         inode_cache_->unlock_shared();
         return _err_ret;
       }
-      if (!fs->get_block(block_id_, &blk)) {
+      if (!fs->get_block(block_id_, &blk, true, 0, buf + ret, csz)) {
         inode_cache_->unlock_shared();
         return -EINVAL;
       }
-      csz = std::min(size, (size_t)BLOCK_SIZE);
-      memcpy(blk->get(), buf + ret, csz);
+      // memcpy(blk->get());
       ret += csz, size -= csz, offset += csz;
     }
     inode_cache_->unlock_shared();
@@ -285,20 +289,20 @@ FileStatus* _fuse_trans_info(struct fuse_file_info* fi) { return reinterpret_cas
 
 bool _check_permission(mode_t mode, int read, int write, int exec, gid_t gid, uid_t uid) {
   auto current_user = fuse_get_context();
-  if(current_user->uid == 0) return true; // super user
-  if(current_user->gid == gid) {
+  if (current_user->uid == 0) return true;  // super user
+  if (current_user->gid == gid) {
     bool flag = true;
     flag &= (mode & S_IRGRP) || !read;
     flag &= (mode & S_IWGRP) || !write;
     flag &= (mode & S_IXGRP) || !exec;
-    if(flag) return true;
+    if (flag) return true;
   }
-  if(current_user->uid == uid) {
+  if (current_user->uid == uid) {
     bool flag = true;
     flag &= (mode & S_IRUSR) || !read;
     flag &= (mode & S_IWUSR) || !write;
     flag &= (mode & S_IXUSR) || !exec;
-    if(flag) return true;
+    if (flag) return true;
   }
   bool flag = true;
   flag &= (mode & S_IROTH) || !read;
@@ -310,15 +314,14 @@ bool _check_permission(mode_t mode, int read, int write, int exec, gid_t gid, ui
 bool _check_user(uid_t mode, uid_t uid, int read, int write, int exec) {
   auto current_user = fuse_get_context();
   // owner or super
-  if(current_user->uid == uid) {
+  if (current_user->uid == uid) {
     bool flag = true;
     flag &= (mode & S_IRUSR) || !read;
     flag &= (mode & S_IWUSR) || !write;
     flag &= (mode & S_IXUSR) || !exec;
-    if(flag) return true;
+    if (flag) return true;
   }
-  if(current_user->uid == 0)
-    return true;
+  if (current_user->uid == 0) return true;
   return false;
 }
 

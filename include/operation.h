@@ -69,6 +69,7 @@ class FSList {
     nw->prev_ = head_;
     nw->next_ = head_->next_;
     head_->next_ = nw;
+    if(nw->next_) nw->next_->prev_ = nw;
     return nw;
   }
   void iter(const std::function<void(T &)>& func) {

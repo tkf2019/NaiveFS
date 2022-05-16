@@ -1,8 +1,7 @@
 #include "cache.h"
 
 namespace naivefs {
-BlockCache::BlockCache(size_t size)
-    : entries_(new Node[size]), head_(new Node), tail_(new Node), size_(size) {
+BlockCache::BlockCache(size_t size) : entries_(new Node[size]), head_(new Node), tail_(new Node), size_(size) {
   for (size_t i = 0; i < size; ++i) {
     free_entries_.push_back(entries_ + i);
   }
@@ -28,42 +27,65 @@ void BlockCache::flush() {
   }
 }
 
-void BlockCache::insert(uint32_t index, Block* block) {
+void BlockCache::insert(uint32_t index, Block* block, bool dirty) {
   DEBUG("[BlockCache] Inserting block %u", index);
   Node* node = nullptr;
   auto iter = map_.find(index);
   if (iter == map_.end()) {
+    INFO("block cache insert: iter doesn't exist");
     if (free_entries_.empty()) {
+      INFO("block cache insert: iter doesn't exist, free entries empty");
       node = tail_->prev_;
+      ASSERT(node != nullptr);
+      // node may equals to head_!!
+      INFO("block cache insert: iter doesn't exist, free entries empty, detach");
       detach(node);
+      INFO("block cache insert: iter doesn't exist, free entries empty, release");
       release(node);
+      INFO("block cache insert: iter doesn't exist, free entries empty, map->erase");
       map_.erase(node->index_);
-    } else {
+    } 
+    // to get the node released in free_entries_
+    {
+      INFO("block cache insert: iter doesn't exist, free entries not empty");
       node = free_entries_.back();
       free_entries_.pop_back();
     }
+    ASSERT(node != nullptr);
     node->index_ = index;
     node->block_ = block;
+    node->dirty_ = dirty;
     map_[index] = node;
     attach(node);
   } else {
+    INFO("block cache insert: iter exists");
     node = iter->second;
+    node->dirty_ |= dirty;
+    ASSERT(node != nullptr);
     ASSERT(node->block_ == block);
+    INFO("block cache insert: iter exists, detach");
     detach(node);
+    INFO("block cache insert: iter exists, attach");
     attach(node);
+    INFO("block cache insert: iter exists, ret");
   }
 }
 
-Block* BlockCache::get(uint32_t index) {
+Block* BlockCache::get(uint32_t index, bool dirty) {
   DEBUG("[BlockCache] Getting block %u", index);
   auto iter = map_.find(index);
   if (iter == map_.end()) {
+    DEBUG("blockcache: nullptr");
     return nullptr;
   } else {
     Node* node = iter->second;
+    ASSERT(node != nullptr);
+    ASSERT(node->block_ != nullptr);
     ASSERT(node->index_ == index);
     detach(node);
     attach(node);
+    node->dirty_ |= dirty;
+    DEBUG("blockcache: return");
     return node->block_;
   }
 }
@@ -98,10 +120,8 @@ DentryCache::~DentryCache() {
   free(root_);
 }
 
-DentryCache::Node* DentryCache::insert(Node* parent, const char* name,
-                                       size_t name_len, uint32_t inode) {
-  DEBUG("[DentryCache] Inserting dentry %s,%u",
-        std::string(name, name_len).c_str(), inode);
+DentryCache::Node* DentryCache::insert(Node* parent, const char* name, size_t name_len, uint32_t inode) {
+  DEBUG("[DentryCache] Inserting dentry %s,%u", std::string(name, name_len).c_str(), inode);
 
   if (parent == nullptr) parent = root_;
 
@@ -121,31 +141,27 @@ DentryCache::Node* DentryCache::insert(Node* parent, const char* name,
   return new_node;
 }
 
-DentryCache::Node* DentryCache::lookup(Node* parent, const char* name,
-                                       size_t name_len) {
+DentryCache::Node* DentryCache::lookup(Node* parent, const char* name, size_t name_len) {
   if (parent == nullptr) parent = root_;
 
   if (name_len == 0) return nullptr;
 
   if (parent->childs_ == nullptr) {
-    DEBUG("[DentryCache] Looking up %s: Not found (no child)",
-          std::string(name, name_len).c_str());
+    DEBUG("[DentryCache] Looking up %s: Not found (no child)", std::string(name, name_len).c_str());
     return nullptr;
   }
 
   Node* ptr = parent->childs_;
+  DEBUG("dentry cache lookup 1");
   do {
-    if (ptr->name_len_ == name_len &&
-        strncmp(ptr->name_, name, name_len) == 0) {
+    if (ptr->name_len_ == name_len && strncmp(ptr->name_, name, name_len) == 0) {
       parent->childs_ = ptr;
-      DEBUG("[DentryCache] Looking up %s: Found",
-            std::string(name, name_len).c_str());
+      DEBUG("[DentryCache] Looking up %s: Found", std::string(name, name_len).c_str());
       return ptr;
     }
     ptr = ptr->next_;
   } while (ptr != parent->childs_);
-  DEBUG("[DentryCache] Looking up %s: Not found (no match)",
-        std::string(name, name_len).c_str());
+  DEBUG("[DentryCache] Looking up %s: Not found (no match)", std::string(name, name_len).c_str());
   return nullptr;
 }
 
@@ -153,18 +169,15 @@ void DentryCache::remove(Node* parent, const char* name, size_t name_len) {
   if (parent == nullptr) parent = root_;
 
   if (parent->childs_ == nullptr) {
-    DEBUG("[DentryCache] Removing %s: Not found (no child)",
-          std::string(name, name_len).c_str());
+    DEBUG("[DentryCache] Removing %s: Not found (no child)", std::string(name, name_len).c_str());
     return;
   }
 
   Node* ptr = parent->childs_->next_;
   Node* prev = ptr;
   do {
-    if (ptr->name_len_ == name_len &&
-        strncmp(ptr->name_, name, name_len) == 0) {
-      DEBUG("[DentryCache] Removing %s: Found",
-            std::string(name, name_len).c_str());
+    if (ptr->name_len_ == name_len && strncmp(ptr->name_, name, name_len) == 0) {
+      DEBUG("[DentryCache] Removing %s: Found", std::string(name, name_len).c_str());
       parent->childs_ = (ptr == ptr->next_) ? nullptr : ptr->next_;
       prev->next_ = ptr->next_;
       release_node(ptr);
@@ -174,8 +187,7 @@ void DentryCache::remove(Node* parent, const char* name, size_t name_len) {
     prev = ptr;
     ptr = ptr->next_;
   } while (ptr != parent->childs_->next_);
-  DEBUG("[DentryCache] Removing %s: Not found (no match)",
-        std::string(name, name_len).c_str());
+  DEBUG("[DentryCache] Removing %s: Not found (no match)", std::string(name, name_len).c_str());
 }
 
 void DentryCache::release_node(Node* parent) {
@@ -190,8 +202,7 @@ void DentryCache::release_node(Node* parent) {
   } while (ptr != parent->childs_);
 }
 
-void DentryCache::alloc_new_node(Node** node, const char* name,
-                                 size_t name_len) {
+void DentryCache::alloc_new_node(Node** node, const char* name, size_t name_len) {
   Node* new_node = (Node*)calloc(1, sizeof(Node) + name_len);
   new_node->childs_ = new_node->next_ = nullptr;
   ASSERT(name_len + 1 <= EXT2_NAME_LEN);

@@ -29,11 +29,11 @@ class BlockCache {
 
   void flush();
 
-  void insert(uint32_t index, Block* block);
+  void insert(uint32_t index, Block* block, bool dirty = false);
 
   void remove(uint32_t index);
 
-  Block* get(uint32_t index);
+  Block* get(uint32_t index, bool dirty = false);
 
   void modify(uint32_t index);
 
@@ -49,7 +49,9 @@ class BlockCache {
       node->block_->flush();
       // release the memory
       delete node->block_;
-    }
+    } else delete node->block_;
+    // push into the pool
+    free_entries_.push_back(node);
   }
 
   inline void attach(Node* node) {

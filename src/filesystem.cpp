@@ -520,32 +520,47 @@ bool FileSystem::get_inode(uint32_t index, ext2_inode** inode) {
   return true;
 }
 
-bool FileSystem::get_block(uint32_t index, Block** block) {
+bool FileSystem::get_block(uint32_t index, Block** block, bool dirty, off_t offset, const char* buf, size_t copy_size) {
+  static std::shared_mutex m_;
   if (index >= super_block_->get_super()->s_blocks_count) {
     WARNING("Block index exceeds blocks count");
     return false;
   }
+  m_.lock_shared();
   // find in block cache
-  *block = block_cache_->get(index);
+  *block = block_cache_->get(index, dirty);
   if (*block == nullptr) {
+    m_.unlock_shared();
     // lasy read
     uint32_t block_group_index = index / super_block_->blocks_per_group();
-    auto iter = block_groups_.find(block_group_index);
-    if (iter == block_groups_.end()) {
-      iter = block_groups_
-                 .insert({block_group_index,
-                          new BlockGroup(
-                              super_block_->get_group_desc(block_group_index))})
-                 .first;
-    }
-    uint32_t inner_index = index % super_block_->blocks_per_group();
-    if (!iter->second->get_block(inner_index, block)) {
-      WARNING("Block has not been allocated in the target block group");
-      return false;
+    m_.lock();
+    *block = block_cache_->get(index);
+    if(*block == nullptr) {
+      auto iter = block_groups_.find(block_group_index);
+      if (iter == block_groups_.end()) {
+        iter = block_groups_
+                  .insert({block_group_index,
+                            new BlockGroup(
+                                super_block_->get_group_desc(block_group_index))})
+                  .first;
+      }
+      uint32_t inner_index = index % super_block_->blocks_per_group();
+      if (!iter->second->get_block(inner_index, block)) {
+        WARNING("Block has not been allocated in the target block group");
+        m_.unlock();
+        return false;
+      }  
+      block_cache_->insert(index, *block, dirty);
     }
     // Update block cache
-    block_cache_->insert(index, *block);
-  }
+    // if dirty is true, copy blk from buf, otherwise copy blk to buf
+    !dirty ? memcpy(const_cast<char*>(buf), (*block)->get() + offset, copy_size) : memcpy((*block)->get() + offset, buf, copy_size);
+    m_.unlock();
+    INFO("get_block ret");
+    return true;
+  } else !dirty ? memcpy(const_cast<char*>(buf), (*block)->get() + offset, copy_size) : memcpy((*block)->get() + offset, buf, copy_size);
+  m_.unlock_shared();
+  INFO("get_block ret");
   return true;
 }
 
@@ -619,6 +634,9 @@ alloc_finished:
 
 bool FileSystem::alloc_block(Block** block, uint32_t* index,
                              ext2_inode* inode) {
+  
+  static std::shared_mutex m_;
+  std::unique_lock<std::shared_mutex> lck(m_);
   ASSERT(inode != nullptr &&
          (S_ISDIR(inode->i_mode) || S_ISREG(inode->i_mode)));
   uint32_t block_index, indirect_block_index;
