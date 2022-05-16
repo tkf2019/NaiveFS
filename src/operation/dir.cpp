@@ -24,7 +24,7 @@ int fuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
       [&buf, &filler](__attribute__((unused)) uint32_t index, Block *block) {
         DentryBlock dentry_block(block);
         for (const auto &dentry : *dentry_block.get()) {
-          INFO("readdir entry: (%d) %s", dentry->name_len,
+          INFO("readdir entry: (%d, inode_id %d) %s", dentry->name_len, dentry->inode,
                std::string(dentry->name, dentry->name_len).c_str());
           if (dentry->name_len)
             filler(buf, std::string(dentry->name, dentry->name_len).c_str(),

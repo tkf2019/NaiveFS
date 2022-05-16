@@ -283,8 +283,7 @@ RetCode FileSystem::inode_delete(uint32_t index) {
           return false;
         });
   } else {
-    visit_inode_blocks(inode, [this](__attribute__((unused)) uint32_t index,
-                                     __attribute__((unused)) Block* block) {
+    visit_inode_blocks(inode, [this](uint32_t index, __attribute__((unused)) Block* block) {
       free_block(index);
       return false;
     });
@@ -349,6 +348,7 @@ RetCode FileSystem::inode_unlink(const Path& path) {
           std::string(last_item.first, last_item.second).c_str());
   }
 
+  DEBUG("s_inodes_count: %d", super_block_->get_super()->s_inodes_count);
   DEBUG("Unlink: %s", path.path());
   return FS_SUCCESS;
 }
@@ -490,10 +490,15 @@ bool FileSystem::get_inode(uint32_t index, ext2_inode** inode) {
     *inode = root_inode_;
     return true;
   }
+
+  // if there're 3 inode 0, 1, 2, remove 1, then 2 becomes unaccessible.
+  /*
+  DEBUG("s_inodes_count: %d, index: %d", super_block_->get_super()->s_inodes_count, index);
   if (index >= super_block_->get_super()->s_inodes_count) {
     WARNING("Inode index exceeds inodes count");
     return false;
-  }
+  }*/
+
   // lazy read
   uint32_t block_group_index = index / super_block_->inodes_per_group();
   auto iter = block_groups_.find(block_group_index);

@@ -39,4 +39,31 @@ int fuse_getattr(const char *path, struct stat *stbuf,
 
   return 0;
 }
+
+int fuse_chmod(const char *path, mode_t mode,
+                 struct fuse_file_info *fi) {
+  (void)fi;
+  INFO("CHMOD: %s", path);
+  ext2_inode *inode;
+  uint32_t inode_id;
+
+  // we assume inode_lookup is thread-safe
+  auto ret = fs->inode_lookup(path, &inode, &inode_id);
+  if (ret) return Code2Errno(ret);
+  auto ic = opm->get_cache(inode_id);
+
+  // can't get inode
+  if (!ic) return -EIO;
+
+  ic->lock();
+  inode = ic->cache_;
+  inode->i_mode = mode;
+  ic->unlock();
+  opm->rel_cache(inode_id);
+  INFO("CHMOD END");
+
+  return 0;
+}
+
+
 }  // namespace naivefs

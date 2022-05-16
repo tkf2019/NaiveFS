@@ -33,7 +33,6 @@ int fuse_create(const char* path, mode_t mode, struct fuse_file_info* fi) {
   inode->i_gid = 0;
   inode->i_uid = 0;
   ic->unlock();
-  fd->fslist_ptr_ = ic->ins(fd);
 
   fi->fh = reinterpret_cast<decltype(fi->fh)>(fd);
 
@@ -61,18 +60,25 @@ int fuse_open(const char* path, struct fuse_file_info* fi) {
   inode = ic->cache_;
   inode->i_atime = nw_time;
   inode->i_ctime = nw_time;
-  if((fi->flags & O_ACCMODE) != O_RDONLY) inode->i_mtime = nw_time;
+  if ((fi->flags & O_ACCMODE) != O_RDONLY) inode->i_mtime = nw_time;
   ic->unlock();
-  fd->fslist_ptr_ = ic->ins(fd);
 
   fi->fh = reinterpret_cast<decltype(fi->fh)>(fd);
 
   return 0;
 }
 
-int fuse_rename(const char* oldname, const char* newname, unsigned int flags) { return 0; }
+int fuse_rename(const char* oldname, const char* newname, unsigned int flags) {
+  INFO("RENAME %s, %s", oldname, newname);
+  return 0;
+}
 
-int fuse_truncate(const char* path, off_t offset, struct fuse_file_info* fi) { return 0; }
+int fuse_truncate(const char* path, off_t offset, struct fuse_file_info* fi) {
+  INFO("TRUNATE %s", path);
+  char buf[1];
+  fuse_write(path, buf, 0, offset, fi);
+  return 0;
+}
 
 int fuse_link(const char* src, const char* dst) {
   INFO("LINK %s,%s", src, dst);
@@ -98,8 +104,10 @@ int fuse_unlink(const char* path) {
     opm->rel_cache(inode_id);
     return -EACCES;
   }
-  ret = fs->inode_unlink(path);
   ic->unlock();
+  opm->rel_cache(inode_id);
+  // TODO: remove, open concurrently
+  ret = fs->inode_unlink(path);
   if (ret) return Code2Errno(ret);
   return 0;
 }
@@ -123,7 +131,6 @@ int fuse_release(const char* path, struct fuse_file_info* fi) {
 
   // File handle is not valid.
   if (!fd) return -EBADF;
-  if ((fi->flags & O_ACCMODE) == O_RDONLY) return -EACCES;
 
   auto id = fd->inode_cache_->inode_id_;
   delete fd;

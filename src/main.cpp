@@ -143,6 +143,7 @@ int main(int argc, char *argv[]) {
   ops.access = naivefs::fuse_access;
   ops.release = naivefs::fuse_release;
   ops.fsync = naivefs::fuse_fsync;
+  ops.chmod = naivefs::fuse_chmod;
   ret = fuse_main(args.argc, args.argv, &ops, NULL);
   fuse_opt_free_args(&args);
   return ret;

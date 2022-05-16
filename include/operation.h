@@ -112,6 +112,7 @@ class InodeCache {
   FSListPtr<FileStatus*>* ins(FileStatus* ptr) {return vec.ins(ptr);}
   int commit() {
     ext2_inode *inode;
+    INFO("inode cache commit %d", inode_id_);
     if (!fs->get_inode(inode_id_, &inode)) return -EIO;
     memcpy(inode, cache_, sizeof(ext2_inode));
     return 0;
@@ -269,7 +270,7 @@ class OpManager {
     auto it = st_.find(inode_id);
     if (it == st_.end()) return;
     std::unique_lock<std::shared_mutex> lck_ic(it->second->inode_rwlock_);
-    it->second->vec.ins(fd);
+    fd->fslist_ptr_ = it->second->vec.ins(fd);
   }
 
   int rel_cache(uint32_t inode_id) {

@@ -160,10 +160,13 @@ int FileStatus::write(const char* buf, size_t offset, size_t size, bool append_f
   std::unique_lock<std::shared_mutex> lck(rwlock);
   inode_cache_->lock_shared();
   size_t isize = file_size();
+  /*
+  INFO("Begin to write, %d, %d", isize, offset);
   if (offset > isize) {
     inode_cache_->unlock_shared();
     return 0;
-  }
+  }*/
+  // It seems that offset can > isize
   int _err_ret = _upd_cache();
   if (_err_ret) {
     inode_cache_->unlock_shared();
@@ -177,11 +180,15 @@ int FileStatus::write(const char* buf, size_t offset, size_t size, bool append_f
     inode_cache_->unlock_shared();
     std::unique_lock<std::shared_mutex> inode_lck(inode_cache_->inode_rwlock_);
     isize = file_size();
-    if (offset > isize) return 0;
     if (append_flag) offset = isize;
 
     Block* blk;
-    if (isize % BLOCK_SIZE == 0) {
+    while (inode_cache_->cache_->i_size + BLOCK_SIZE - inode_cache_->cache_->i_size % BLOCK_SIZE < offset) {
+      uint32_t index;
+      if (!fs->alloc_block(&blk, &index, inode_cache_->cache_)) return 0;
+      inode_cache_->cache_->i_size += BLOCK_SIZE - inode_cache_->cache_->i_size % BLOCK_SIZE;
+    }
+    if (inode_cache_->cache_->i_size % BLOCK_SIZE == 0) {
       uint32_t index;
       if (!fs->alloc_block(&blk, &index, inode_cache_->cache_)) return 0;
     }
