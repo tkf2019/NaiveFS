@@ -100,6 +100,17 @@ void FileSystem::flush() {
   block_cache_->flush();
 }
 
+
+void FileSystem::flush(uint32_t inode_index) {
+  super_block_->flush();
+
+  for (auto bg : block_groups_) {
+    bg.second->flush();
+  }
+
+  block_cache_->flush(inode_index);
+}
+
 RetCode FileSystem::inode_create(const Path& path, ext2_inode** inode,
                                  uint32_t* inode_index_result, mode_t mode) {
   if (!path.valid()) return FS_INVALID;
@@ -526,10 +537,11 @@ bool FileSystem::get_inode(uint32_t index, ext2_inode** inode) {
 
 bool FileSystem::get_block(uint32_t index, Block** block, bool dirty, off_t offset, const char* buf, size_t copy_size) {
   static std::shared_mutex m_;
+  /*
   if (index >= super_block_->get_super()->s_blocks_count) {
     WARNING("Block index exceeds blocks count");
     return false;
-  }
+  }*/
   m_.lock_shared();
   // find in block cache
   *block = block_cache_->get(index, dirty);
@@ -609,6 +621,7 @@ bool FileSystem::alloc_block(Block** block, uint32_t* index) {
 
   uint32_t block_group_index;
   // allocated by block group
+  char __a[BLOCK_SIZE] = {0};
   for (auto bg : block_groups_) {
     if (bg.second->get_desc()->bg_free_blocks_count) {
       if (bg.second->alloc_block(block, index)) {
@@ -617,6 +630,8 @@ bool FileSystem::alloc_block(Block** block, uint32_t* index) {
       }
     }
   }
+
+  ASSERT(memcmp(*block, __a, BLOCK_SIZE) == 0);
 
   // create a new block group
   alloc_block_group(&block_group_index);

@@ -26,6 +26,8 @@ class FileSystem {
 
   void flush();
 
+  void flush(uint32_t inode_index);
+
   /**
    * Create a new inode
    */

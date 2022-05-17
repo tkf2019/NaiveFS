@@ -13,7 +13,8 @@ void* alloc_aligned(size_t size) {
     ERR("Failed to alloc aligned buffer");
     return nullptr;
   }
-  memset(buf, 0, size);
+  // since memset has been done by callers
+  // memset(buf, 0, size);
   return buf;
 }
 

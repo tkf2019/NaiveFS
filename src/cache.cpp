@@ -27,6 +27,17 @@ void BlockCache::flush() {
   }
 }
 
+void BlockCache::flush(uint32_t inode_index) {
+  for (auto& node : map_)
+    if (node.second->index_ == inode_index) {
+      if (node.second->dirty_) {
+        DEBUG("[BlockCache] Flush block %u", node.second->index_);
+        node.second->block_->flush();
+        node.second->dirty_ = false;
+      }
+    }
+}
+
 void BlockCache::insert(uint32_t index, Block* block, bool dirty) {
   DEBUG("[BlockCache] Inserting block %u", index);
   Node* node = nullptr;
@@ -44,7 +55,7 @@ void BlockCache::insert(uint32_t index, Block* block, bool dirty) {
       release(node);
       INFO("block cache insert: iter doesn't exist, free entries empty, map->erase");
       map_.erase(node->index_);
-    } 
+    }
     // to get the node released in free_entries_
     {
       INFO("block cache insert: iter doesn't exist, free entries not empty");

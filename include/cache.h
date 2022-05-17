@@ -29,6 +29,8 @@ class BlockCache {
 
   void flush();
 
+  void flush(uint32_t inode_index);
+
   void insert(uint32_t index, Block* block, bool dirty = false);
 
   void remove(uint32_t index);
