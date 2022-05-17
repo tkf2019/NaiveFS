@@ -3,7 +3,7 @@
 mkdir build
 cd build
 cmake ..
-make
+make -j
 
 rm -rf /tmp/disk
 touch /tmp/disk

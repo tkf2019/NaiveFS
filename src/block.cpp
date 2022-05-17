@@ -11,7 +11,7 @@ void SuperBlock::init_super_block() {
       super_->s_blocks_per_group = BLOCKS_PER_GROUP;
       super_->s_inodes_per_group = INODES_PER_GROUP;
       // 1 inode bitmap, 1 block bitmap, 1 inode table block, no data blocks
-      super_->s_blocks_count = 3;
+      super_->s_blocks_count = 0;
       super_->s_inodes_count = 1;  // 1 root inode
       super_->s_first_ino = ROOT_INODE;
       super_->s_inode_size = sizeof(ext2_inode);
@@ -144,6 +144,7 @@ bool BlockGroup::alloc_inode(ext2_inode** inode, uint32_t* index, mode_t mode) {
 
 bool BlockGroup::alloc_block(Block** block, uint32_t* index) {
   int ret = block_bitmap_->alloc_new();
+  DEBUG("[BlockGroup] Alloc %u", ret);
   if (ret == -1) return false;
 
   // update block group descriptor

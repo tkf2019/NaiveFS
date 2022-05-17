@@ -1,7 +1,6 @@
 #include "operation.h"
 namespace naivefs {
 int FileStatus::next_block() {
-  INFO("next_block: %d", block_id_in_file_);
   if (block_id_in_file_ <= IBLOCK_11) {
     // The first 12 blocks
     block_id_in_file_++;
@@ -143,7 +142,7 @@ int FileStatus::copy_to_buf(char* buf, size_t offset, size_t size) {
   if (!fs->get_block(block_id_, &blk, false, offset % BLOCK_SIZE, buf, csz)) return -EINVAL;
   // memcpy(buf, blk->get());
   ret += csz, size -= csz, offset += csz, buf += csz;
-  INFO("copy_to_buf: ret: %llu, size: %llu, offset: %llu", ret, size, offset);
+  // INFO("copy_to_buf: ret: %llu, size: %llu, offset: %llu", ret, size, offset);
   while (size) {
     if (offset >= isize) return ret;
     _err_ret = next_block();
@@ -174,7 +173,7 @@ int FileStatus::write(const char* buf, size_t offset, size_t size, bool append_f
     return _err_ret;
   }
   if (append_flag) offset = isize;
-  INFO("Begin to write, now block: %u(%u), write offset: %llu\n", block_id_, block_id_in_file_, offset);
+  // INFO("Begin to write, now block: %u(%u), write offset: %llu\n", block_id_, block_id_in_file_, offset);
   if (offset + size > isize) {
     // Now we need to modify the inode.
     inode_cache_->unlock_shared();
@@ -194,20 +193,20 @@ int FileStatus::write(const char* buf, size_t offset, size_t size, bool append_f
     }
     _err_ret = seek(offset / BLOCK_SIZE);
     if (_err_ret) return _err_ret;
-    INFO("write: seek success");
+    // INFO("write: seek success");
 
     // write is dirty
     // since get_block...memcpy(blk->get()) is not atomic (but we can assume this when the number of threads is small, and cache is big although),
     size_t ret = 0;
     size_t csz = std::min(size, BLOCK_SIZE - (size_t)offset % BLOCK_SIZE);
     if (!fs->get_block(block_id_, &blk, true, offset % BLOCK_SIZE, buf + ret, csz)) return -EINVAL;
-    INFO("write read first block");
+    // INFO("write read first block");
     ret += csz, size -= csz, offset += csz, inode_cache_->cache_->i_size = std::max((size_t)inode_cache_->cache_->i_size, (size_t)offset);
 
     while (size) {
       csz = std::min(size, (size_t)BLOCK_SIZE);
       if (offset >= inode_cache_->cache_->i_size) {
-        INFO("write: need allocation");
+        // INFO("write: need allocation");
         uint32_t _;
         if (!fs->alloc_block(&blk, &_, inode_cache_->cache_)) return ret;
         if (next_block()) {
@@ -219,7 +218,7 @@ int FileStatus::write(const char* buf, size_t offset, size_t size, bool append_f
           return -EIO;
         }
       } else {
-        INFO("write: don't need allocation");
+        // INFO("write: don't need allocation");
         if (next_block()) {
           WARNING("write: EIO");
           return -EIO;
@@ -230,18 +229,18 @@ int FileStatus::write(const char* buf, size_t offset, size_t size, bool append_f
         }
       }
       // memcpy(blk->get(), buf + ret, csz);
-      INFO("write read blocks");
+      // INFO("write read blocks");
       ret += csz, size -= csz, offset += csz, inode_cache_->cache_->i_size = std::max((size_t)inode_cache_->cache_->i_size, (size_t)offset);
     }
 
-    INFO("write: upd_All");
+    // INFO("write: upd_All");
     inode_cache_->upd_all();
-    INFO("write: end");
+    // INFO("write: end");
 
     return ret;
 
   } else {
-    INFO("write: overlap");
+    // INFO("write: overlap");
     _err_ret = seek(offset / BLOCK_SIZE);
     if (_err_ret) {
       inode_cache_->unlock_shared();

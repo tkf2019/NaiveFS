@@ -61,7 +61,7 @@ void BlockCache::insert(uint32_t index, Block* block, bool dirty) {
     map_[index] = node;
     attach(node);
   } else {
-    INFO("block cache insert: iter exists");
+    // INFO("block cache insert: iter exists");
     node = iter->second;
     node->dirty_ |= dirty;
     ASSERT(node != nullptr);
@@ -154,7 +154,7 @@ DentryCache::Node* DentryCache::lookup(Node* parent, const char* name,
   }
 
   Node* ptr = parent->childs_;
-  DEBUG("dentry cache lookup 1");
+  // DEBUG("dentry cache lookup 1");
   do {
     if (ptr->name_len_ == name_len &&
         strncmp(ptr->name_, name, name_len) == 0) {

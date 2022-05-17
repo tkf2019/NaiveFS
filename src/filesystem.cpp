@@ -59,9 +59,9 @@ FileSystem::FileSystem()
   // init root inode
   if (!block_groups_[0]->get_inode(ROOT_INODE, &root_inode_)) {
     // alloc new root inode
-    
+
     // ASSERT(block_groups_[0]->alloc_inode(&root_inode_, nullptr, S_IFDIR));
-    auto ret =block_groups_[0]->alloc_inode(&root_inode_, nullptr, S_IFDIR);
+    auto ret = block_groups_[0]->alloc_inode(&root_inode_, nullptr, S_IFDIR);
     // ASSERT is disabled under Release
     ASSERT(ret);
     inode_init(root_inode_);
@@ -99,7 +99,6 @@ void FileSystem::flush() {
 
   block_cache_->flush();
 }
-
 
 void FileSystem::flush(uint32_t inode_index) {
   super_block_->flush();
@@ -281,6 +280,7 @@ RetCode FileSystem::inode_lookup(ext2_inode* parent, const char* name,
 }
 
 RetCode FileSystem::inode_delete(uint32_t index) {
+  DEBUG("Deleting INODE %u", index);
   if (index == ROOT_INODE) return FS_INVALID;
   ext2_inode* inode;
   if (!get_inode(index, &inode)) return FS_NOT_FOUND;
@@ -299,11 +299,16 @@ RetCode FileSystem::inode_delete(uint32_t index) {
           return false;
         });
   } else {
+    uint32_t blocks;
     visit_inode_blocks(
-        inode, [this](uint32_t index, __attribute__((unused)) Block* block) {
+        inode,
+        [this, &blocks](uint32_t index, __attribute__((unused)) Block* block) {
           free_block(index);
+          blocks++;
           return false;
         });
+    ASSERT(blocks == inode->i_blocks /
+                         (2 << super_block_->get_super()->s_log_block_size));
   }
 
   free_inode(index);
@@ -365,7 +370,6 @@ RetCode FileSystem::inode_unlink(const Path& path) {
           std::string(last_item.first, last_item.second).c_str());
   }
 
-  DEBUG("s_inodes_count: %d", super_block_->get_super()->s_inodes_count);
   DEBUG("Unlink: %s", path.path());
   return FS_SUCCESS;
 }
@@ -535,7 +539,8 @@ bool FileSystem::get_inode(uint32_t index, ext2_inode** inode) {
   return true;
 }
 
-bool FileSystem::get_block(uint32_t index, Block** block, bool dirty, off_t offset, const char* buf, size_t copy_size) {
+bool FileSystem::get_block(uint32_t index, Block** block, bool dirty,
+                           off_t offset, const char* buf, size_t copy_size) {
   static std::shared_mutex m_;
   /*
   if (index >= super_block_->get_super()->s_blocks_count) {
@@ -551,40 +556,37 @@ bool FileSystem::get_block(uint32_t index, Block** block, bool dirty, off_t offs
     uint32_t block_group_index = index / super_block_->blocks_per_group();
     m_.lock();
     *block = block_cache_->get(index);
-    if(*block == nullptr) {
+    if (*block == nullptr) {
       auto iter = block_groups_.find(block_group_index);
       if (iter == block_groups_.end()) {
         iter = block_groups_
-                  .insert({block_group_index,
-                            new BlockGroup(
-                                super_block_->get_group_desc(block_group_index))})
-                  .first;
+                   .insert({block_group_index,
+                            new BlockGroup(super_block_->get_group_desc(
+                                block_group_index))})
+                   .first;
       }
       uint32_t inner_index = index % super_block_->blocks_per_group();
       if (!iter->second->get_block(inner_index, block)) {
         WARNING("Block has not been allocated in the target block group");
         m_.unlock();
         return false;
-      }  
+      }
       block_cache_->insert(index, *block, dirty);
     }
     // Update block cache
     // if dirty is true, copy blk from buf, otherwise copy blk to buf
-    !dirty ? memcpy(const_cast<char*>(buf), (*block)->get() + offset, copy_size) : memcpy((*block)->get() + offset, buf, copy_size);
+    !dirty ? memcpy(const_cast<char*>(buf), (*block)->get() + offset, copy_size)
+           : memcpy((*block)->get() + offset, buf, copy_size);
     m_.unlock();
-    INFO("get_block ret");
     return true;
-  } else !dirty ? memcpy(const_cast<char*>(buf), (*block)->get() + offset, copy_size) : memcpy((*block)->get() + offset, buf, copy_size);
+  } else
+    !dirty ? memcpy(const_cast<char*>(buf), (*block)->get() + offset, copy_size)
+           : memcpy((*block)->get() + offset, buf, copy_size);
   m_.unlock_shared();
-  INFO("get_block ret");
   return true;
 }
 
 bool FileSystem::alloc_inode(ext2_inode** inode, uint32_t* index, mode_t mode) {
-  // update super block
-  super_block_->get_super()->s_free_inodes_count--;
-  super_block_->get_super()->s_inodes_count++;
-
   uint32_t block_group_index;
   // allocated by block group
   for (auto bg : block_groups_) {
@@ -607,6 +609,9 @@ bool FileSystem::alloc_inode(ext2_inode** inode, uint32_t* index, mode_t mode) {
   return false;
 
 alloc_finished:
+  // update super block
+  super_block_->get_super()->s_free_inodes_count--;
+  super_block_->get_super()->s_inodes_count++;
   // must be converted to the index of the whole file system
   *index = block_group_index * super_block_->inodes_per_group() + *index;
   DEBUG("Allocate new inode %u in block group %u", *index, block_group_index);
@@ -615,13 +620,8 @@ alloc_finished:
 
 bool FileSystem::alloc_block(Block** block, uint32_t* index) {
   ASSERT(block != nullptr && index != nullptr);
-  // update super block
-  super_block_->get_super()->s_free_blocks_count--;
-  super_block_->get_super()->s_blocks_count++;
-
   uint32_t block_group_index;
   // allocated by block group
-  // char __a[BLOCK_SIZE] = {0};
   for (auto bg : block_groups_) {
     if (bg.second->get_desc()->bg_free_blocks_count) {
       if (bg.second->alloc_block(block, index)) {
@@ -630,8 +630,6 @@ bool FileSystem::alloc_block(Block** block, uint32_t* index) {
       }
     }
   }
-
-  // ASSERT(memcmp(*block, __a, BLOCK_SIZE) == 0);
 
   // create a new block group
   alloc_block_group(&block_group_index);
@@ -643,6 +641,9 @@ bool FileSystem::alloc_block(Block** block, uint32_t* index) {
   return false;
 
 alloc_finished:
+  // update super block
+  super_block_->get_super()->s_free_blocks_count--;
+  super_block_->get_super()->s_blocks_count++;
   // must be converted to the index of the whole file system
   *index = block_group_index * super_block_->blocks_per_group() + *index;
   // add to block cache
@@ -653,7 +654,6 @@ alloc_finished:
 
 bool FileSystem::alloc_block(Block** block, uint32_t* index,
                              ext2_inode* inode) {
-  
   static std::shared_mutex m_;
   std::unique_lock<std::shared_mutex> lck(m_);
   ASSERT(inode != nullptr &&
@@ -824,10 +824,6 @@ bool FileSystem::alloc_block_group(uint32_t* index) {
 }
 
 bool FileSystem::free_inode(uint32_t index) {
-  // update super block
-  super_block_->get_super()->s_free_inodes_count++;
-  super_block_->get_super()->s_inodes_count--;
-
   uint32_t block_group_index = index / super_block_->inodes_per_group();
   uint32_t inner_index = index % super_block_->inodes_per_group();
   auto iter = block_groups_.find(block_group_index);
@@ -838,19 +834,17 @@ bool FileSystem::free_inode(uint32_t index) {
                             super_block_->get_group_desc(block_group_index))})
                .first;
   }
-  DEBUG("Free END");
   if (!iter->second->free_inode(inner_index)) {
     WARNING("Attempting to free nonexistent inode!");
     return false;
   }
+  // update super block
+  super_block_->get_super()->s_free_inodes_count++;
+  super_block_->get_super()->s_inodes_count--;
   return true;
 }
 
 bool FileSystem::free_block(uint32_t index) {
-  // update super block
-  super_block_->get_super()->s_free_blocks_count++;
-  super_block_->get_super()->s_blocks_count--;
-
   uint32_t block_group_index = index / super_block_->blocks_per_group();
   uint32_t inner_index = index % super_block_->blocks_per_group();
   auto iter = block_groups_.find(block_group_index);
@@ -865,6 +859,9 @@ bool FileSystem::free_block(uint32_t index) {
     WARNING("Attempting to free nonexistent block!");
     return false;
   }
+  // update super block
+  super_block_->get_super()->s_free_blocks_count++;
+  super_block_->get_super()->s_blocks_count--;
   // free block in block cache
   block_cache_->remove(index);
   return true;

@@ -149,7 +149,7 @@ class FileStatus {
     memset(indirect_block_, 0, sizeof(indirect_block_));
   }
   ~FileStatus() {
-    INFO("~FileStatus");
+    // INFO("~FileStatus");
     ASSERT(fslist_ptr_ != nullptr);
     inode_cache_->lock();
     inode_cache_->del(fslist_ptr_);
@@ -246,10 +246,10 @@ class OpManager {
   }
   InodeCache *get_cache(uint32_t inode_id) {
     std::unique_lock<std::shared_mutex> lck(m_);
-    INFO("OpManager get_cache inode_id: %d", inode_id);
+    // INFO("OpManager get_cache inode_id: %d", inode_id);
     if (!st_.count(inode_id)) {
       auto ic = new InodeCache(inode_id);
-      INFO("OpManager create new cache");
+      // INFO("OpManager create new cache");
       if (!ic->init()) {
         delete ic;
         return nullptr;
@@ -286,16 +286,16 @@ class OpManager {
     if (it == st_.end()) return 0;
     it->second->lock();
     if(!--it->second->cnts_) {
-      INFO("rel cache success");
+      // INFO("rel cache success");
       ret = it->second->commit();
       it->second->unlock();
       delete it->second;
       st_.erase(it);
     } else {
-      INFO("rel cache: cache cnts %d", it->second->cnts_);
+      // INFO("rel cache: cache cnts %d", it->second->cnts_);
       it->second->unlock();
     }
-    INFO("rel cache returns %d", ret);
+    // INFO("rel cache returns %d", ret);
     return ret;
   }
 

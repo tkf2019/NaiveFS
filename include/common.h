@@ -102,7 +102,7 @@ inline int Code2Errno(RetCode code) {
   return 0;
 }
 
-#define NO_LOG 1
+// #define NO_LOG 1
 }  // namespace naivefs
 
 #endif
