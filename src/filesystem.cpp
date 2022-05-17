@@ -1,5 +1,10 @@
 #include "filesystem.h"
 
+
+#define FUSE_USE_VERSION 31
+#include <fuse.h>
+
+
 namespace naivefs {
 
 /**
@@ -21,8 +26,9 @@ static void inode_init(ext2_inode* inode) {
   // for regular file size
   inode->i_size = 0;
   // currently unused fields
-  inode->i_uid = 0;
-  inode->i_gid = 0;
+  auto user = fuse_get_context();
+  inode->i_uid = user->uid;
+  inode->i_gid = user->gid;
   inode->i_file_acl = 0;
   inode->i_dir_acl = 0;
   inode->i_faddr = 0;
@@ -67,7 +73,7 @@ FileSystem::FileSystem()
     inode_init(root_inode_);
     // root directory: cannot be written or executed
     root_inode_->i_mode =
-        EXT2_S_IFDIR | EXT2_S_IRUSR | EXT2_S_IRGRP | EXT2_S_IROTH;
+        EXT2_S_IFDIR | EXT2_S_IRUSR | EXT2_S_IRGRP | EXT2_S_IROTH | EXT2_S_IWUSR | EXT2_S_IXGRP | EXT2_S_IXOTH | EXT2_S_IXUSR;
   } else {
     inode_display(root_inode_);
   }
