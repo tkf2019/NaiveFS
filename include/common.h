@@ -50,7 +50,7 @@ enum FSState { UNINIT = 0x0, NORMAL = 0x1 };
 #define ACCESS_INODE(__i) UPDATE_TIME(__i->i_atime)
 #define MODIFY_INODE(__i) UPDATE_TIME(__i->i_mtime)
 
-#define BLOCK_CACHE_SIZE 32768  // TODO: maybe larger ?
+#define BLOCK_CACHE_SIZE 65536  // TODO: maybe larger ?
 
 // dentry types
 
@@ -101,8 +101,6 @@ inline int Code2Errno(RetCode code) {
   }
   return 0;
 }
-
-#define NO_LOG 1
 }  // namespace naivefs
 
 #endif

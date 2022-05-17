@@ -22,9 +22,6 @@ static const char *loglevel_str[] = {
     [LOG_INFO] = "[info] ",    [LOG_DEBUG] = "[debug]",
 };
 
-#ifdef NO_LOG
-void __LOG(int level, const char *func, int line, const char *format, ...) {}
-#else
 void __LOG(int level, const char *func, int line, const char *format, ...) {
   static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
   va_list ap;
@@ -43,7 +40,6 @@ void __LOG(int level, const char *func, int line, const char *format, ...) {
   pthread_mutex_unlock(&lock);
   fflush(logfile);
 }
-#endif
 
 void logging_setlevel(int new_level) { loglevel = new_level; }
 

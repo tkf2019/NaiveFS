@@ -80,8 +80,8 @@ Block* BlockCache::get(uint32_t index, bool dirty) {
     ASSERT(node != nullptr);
     ASSERT(node->block_ != nullptr);
     ASSERT(node->index_ == index);
-    detach(node);
-    attach(node);
+    // detach(node);
+    // attach(node);
     node->dirty_ |= dirty;
     return node->block_;
   }
@@ -105,6 +105,11 @@ void BlockCache::remove(uint32_t index) {
 void BlockCache::modify(uint32_t index) {
   if (map_.find(index) == map_.end()) return;
   DEBUG("[BlockCache] Modify block %u", index);
+  if (index == 0) {
+    ext2_dir_entry_2* dir = (ext2_dir_entry_2*)map_[index]->block_->get();
+    DEBUG("Block first dentry %s",
+          std::string(dir->name, dir->name_len).c_str());
+  }
   map_[index]->dirty_ = true;
 }
 

@@ -178,7 +178,7 @@ off_t BlockGroup::inode_block_offset(uint32_t inode_block_index) {
 }
 
 off_t BlockGroup::data_block_offset(uint32_t data_block_index) {
-  return block_bitmap_->offset() + NUM_INODE_TABLE_BLOCKS * BLOCK_SIZE +
+  return block_bitmap_->offset() + (NUM_INODE_TABLE_BLOCKS + 1) * BLOCK_SIZE +
          data_block_index * BLOCK_SIZE;
 }
 }  // namespace naivefs

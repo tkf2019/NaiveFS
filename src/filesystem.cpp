@@ -562,19 +562,6 @@ error_occured:
 }
 
 bool FileSystem::get_inode(uint32_t index, ext2_inode** inode) {
-  // INFO("get inode: %d", index);
-  if (index == -1) {
-    *inode = root_inode_;
-    return true;
-  }
-
-  // if there're 3 inode 0, 1, 2, remove 1, then 2 becomes unaccessible.
-  /*
-  DEBUG("s_inodes_count: %d, index: %d",
-  super_block_->get_super()->s_inodes_count, index); if (index >=
-  super_block_->get_super()->s_inodes_count) { WARNING("Inode index exceeds
-  inodes count"); return false;
-  }*/
 
   // lazy read
   uint32_t block_group_index = index / super_block_->inodes_per_group();
@@ -611,7 +598,7 @@ bool FileSystem::get_block(uint32_t index, Block** block, bool dirty,
     // lasy read
     uint32_t block_group_index = index / super_block_->blocks_per_group();
     m_.lock();
-    *block = block_cache_->get(index);
+    *block = block_cache_->get(index, dirty);
     if (*block == nullptr) {
       auto iter = block_groups_.find(block_group_index);
       if (iter == block_groups_.end()) {
@@ -631,13 +618,18 @@ bool FileSystem::get_block(uint32_t index, Block** block, bool dirty,
     }
     // Update block cache
     // if dirty is true, copy blk from buf, otherwise copy blk to buf
-    !dirty ? memcpy(const_cast<char*>(buf), (*block)->get() + offset, copy_size)
-           : memcpy((*block)->get() + offset, buf, copy_size);
+    if (buf) 
+      !dirty
+          ? memcpy(const_cast<char*>(buf), (*block)->get() + offset, copy_size)
+          : memcpy((*block)->get() + offset, buf, copy_size);
     m_.unlock();
     return true;
-  } else
-    !dirty ? memcpy(const_cast<char*>(buf), (*block)->get() + offset, copy_size)
-           : memcpy((*block)->get() + offset, buf, copy_size);
+  } else {
+    if (buf)
+      !dirty
+          ? memcpy(const_cast<char*>(buf), (*block)->get() + offset, copy_size)
+          : memcpy((*block)->get() + offset, buf, copy_size);
+  }
   m_.unlock_shared();
   return true;
 }
@@ -718,7 +710,7 @@ bool FileSystem::alloc_block(Block** block, uint32_t* index,
   uint32_t num_blocks = super_block_->num_aligned_blocks(inode->i_blocks);
   Block* indirect_block = nullptr;
   if (!alloc_block(block, &block_index)) goto error_occured;
-
+  
   if (num_blocks < MAX_DIR_BLOCKS) {
     inode->i_block[num_blocks] = block_index;
   } else if (num_blocks < MAX_DIR_BLOCKS + MAX_IND_BLOCKS) {
