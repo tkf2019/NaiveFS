@@ -65,8 +65,6 @@ int fuse_mkdir(const char *path, mode_t mode) {
   ic->unlock();
   opm->rel_cache(id);
 
-  
-
   INFO("MKDIR END");
 
   return 0;

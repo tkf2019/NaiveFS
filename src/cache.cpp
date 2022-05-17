@@ -48,7 +48,6 @@ void BlockCache::insert(uint32_t index, Block* block, bool dirty) {
       INFO("block cache insert: iter doesn't exist, free entries empty");
       node = tail_->prev_;
       ASSERT(node != nullptr);
-      // node may equals to head_!!
       INFO("block cache insert: iter doesn't exist, free entries empty, detach");
       detach(node);
       INFO("block cache insert: iter doesn't exist, free entries empty, release");
