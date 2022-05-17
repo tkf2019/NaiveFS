@@ -26,8 +26,8 @@ void* fuse_init(struct fuse_conn_info* info, fuse_config* config) {
 void fuse_destroy(void* private_data) {
   INFO("DESTROY")
 
-  delete fs;
   delete opm;
+  delete fs;
   disk_close();
 
   return;

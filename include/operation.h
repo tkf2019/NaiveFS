@@ -148,16 +148,16 @@ class FileStatus {
     block_id_in_file_ = 0;
     memset(indirect_block_, 0, sizeof(indirect_block_));
   }
-  ~FileStatus() {
-    // INFO("~FileStatus");
-    ASSERT(fslist_ptr_ != nullptr);
+  ~FileStatus() = default;
+  bool is_one_block(off_t off) { return off / BLOCK_SIZE == block_id_in_file_; }
+  bool check_size(off_t off, size_t counts) { return counts + off > (size_t)inode_cache_->cache_->i_size; }
+  size_t file_size() { return inode_cache_->cache_->i_size; }
+
+  void rel() {
     inode_cache_->lock();
     inode_cache_->del(fslist_ptr_);
     inode_cache_->unlock();
   }
-  bool is_one_block(off_t off) { return off / BLOCK_SIZE == block_id_in_file_; }
-  bool check_size(off_t off, size_t counts) { return counts + off > (size_t)inode_cache_->cache_->i_size; }
-  size_t file_size() { return inode_cache_->cache_->i_size; }
 
   /**
    * @brief next_block: get the next block of block_id_in_file_, and

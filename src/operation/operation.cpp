@@ -306,7 +306,7 @@ FileStatus* _fuse_trans_info(struct fuse_file_info* fi) { return reinterpret_cas
 
 bool _check_permission(mode_t mode, int read, int write, int exec, gid_t gid, uid_t uid) {
   auto current_user = fuse_get_context();
-  if (current_user->uid == 0) return true;  // super user
+  if  (_check_user(mode, uid, 0, 0, 0)) return true;
   if (current_user->gid == gid) {
     bool flag = true;
     flag &= (mode & S_IRGRP) || !read;

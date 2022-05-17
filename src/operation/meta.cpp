@@ -261,6 +261,7 @@ int fuse_release(const char* path, struct fuse_file_info* fi) {
   if (!fd) return -EBADF;
 
   auto id = fd->inode_cache_->inode_id_;
+  fd->rel();
   delete fd;
   opm->rel_cache(id);
   return 0;

@@ -54,7 +54,7 @@ int fuse_chmod(const char *path, mode_t mode, struct fuse_file_info *fi) {
   // we assume inode_lookup is thread-safe
   auto ret = fs->inode_lookup(path, &inode, &inode_id);
   if (ret) return Code2Errno(ret);
-  if (!_check_permission(inode->i_mode, 1, 1, 0, inode->i_gid, inode->i_uid)) return -EACCES;
+  if (!_check_user(inode->i_mode, inode->i_uid, 0, 0, 0)) return -EACCES;
   auto ic = opm->get_cache(inode_id);
 
   // can't get inode
