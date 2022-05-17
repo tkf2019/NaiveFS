@@ -115,6 +115,7 @@ void test_filesystem() {
     uint32_t index;
     fs->alloc_block(&block, &index, test_inode);
   }
+  fs->inode_unlink("/home/test.txt");
   delete fs;
   naivefs::disk_close();
 }

@@ -29,14 +29,13 @@ void BlockCache::flush() {
 }
 
 void BlockCache::flush(uint32_t inode_index) {
-  for (auto& node : map_)
-    if (node.second->index_ == inode_index) {
-      if (node.second->dirty_) {
-        DEBUG("[BlockCache] Flush block %u", node.second->index_);
-        node.second->block_->flush();
-        node.second->dirty_ = false;
-      }
-    }
+  auto iter = map_.find(inode_index);
+  if (iter == map_.end() && iter->second->dirty_) {
+    ASSERT(inode_index == iter->second->index_);
+    DEBUG("[BlockCache] Flush block %u", iter->second->index_);
+    iter->second->block_->flush();
+    iter->second->dirty_ = false;
+  }
 }
 
 void BlockCache::insert(uint32_t index, Block* block, bool dirty) {
@@ -99,6 +98,7 @@ void BlockCache::remove(uint32_t index) {
     detach(node);
     release(node);
     map_.erase(node->index_);
+    free_entries_.push_back(node);
   }
 }
 

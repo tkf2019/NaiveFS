@@ -286,6 +286,8 @@ RetCode FileSystem::inode_delete(uint32_t index) {
   if (!get_inode(index, &inode)) return FS_NOT_FOUND;
   if (!S_ISREG(inode->i_mode) && !S_ISDIR(inode->i_mode)) return FS_NOT_FOUND;
 
+  inode_display(inode);
+
   if (S_ISDIR(inode->i_mode)) {
     visit_inode_blocks(
         inode, [this](__attribute__((unused)) uint32_t index, Block* block) {
@@ -299,18 +301,72 @@ RetCode FileSystem::inode_delete(uint32_t index) {
           return false;
         });
   } else {
-    uint32_t blocks;
-    visit_inode_blocks(
-        inode,
-        [this, &blocks](uint32_t index, __attribute__((unused)) Block* block) {
-          free_block(index);
-          blocks++;
-          return false;
-        });
-    ASSERT(blocks == inode->i_blocks /
-                         (2 << super_block_->get_super()->s_log_block_size));
+    uint32_t curr_num = 0;
+    uint32_t num_blocks = super_block_->num_aligned_blocks(inode->i_blocks);
+    Block *indirect_block, *double_indirect_block, *triple_indirect_block;
+    for (int i = 0; i < EXT2_N_BLOCKS && curr_num < num_blocks; ++i) {
+      if (i < EXT2_NDIR_BLOCKS) {
+        free_block(inode->i_block[i]);
+        curr_num++;
+      } else if (i == EXT2_IND_BLOCK) {
+        if (!get_block(inode->i_block[i], &indirect_block)) return FS_NOT_FOUND;
+        uint32_t* ptr = (uint32_t*)indirect_block->get();
+        uint32_t* end = ptr + NUM_INDIRECT_BLOCKS;
+        while (curr_num < num_blocks && ptr != end) {
+          if (!free_block(*ptr)) return FS_NOT_FOUND;
+          ptr++;
+          curr_num++;
+        }
+        if (!free_block(inode->i_block[i])) return FS_NOT_FOUND;
+        DEBUG("%u", curr_num);
+      } else if (i == EXT2_DIND_BLOCK) {
+        if (!get_block(inode->i_block[i], &indirect_block)) return FS_NOT_FOUND;
+        // visit_indirect_blocks(indirect_block, num_blocks)
+        ASSERT(curr_num == MAX_DIR_BLOCKS + MAX_IND_BLOCKS);
+        uint32_t* ptr = (uint32_t*)indirect_block->get();
+        uint32_t* end = ptr + NUM_INDIRECT_BLOCKS;
+        while (curr_num < num_blocks && ptr != end) {
+          if (!get_block(*ptr, &double_indirect_block)) return FS_NOT_FOUND;
+          uint32_t* double_ptr = (uint32_t*)double_indirect_block->get();
+          uint32_t* double_end = double_ptr + NUM_INDIRECT_BLOCKS;
+          while (curr_num < num_blocks && double_ptr != double_end) {
+            if (!free_block(*double_ptr)) return FS_NOT_FOUND;
+            double_ptr++;
+            curr_num++;
+          }
+          free_block(*ptr);
+          ptr++;
+        }
+        if (!free_block(inode->i_block[i])) return FS_NOT_FOUND;
+      } else {
+        ASSERT(curr_num == MAX_DIR_BLOCKS + MAX_IND_BLOCKS + MAX_DIND_BLOCKS);
+        uint32_t* ptr = (uint32_t*)indirect_block->get();
+        uint32_t* end = ptr + NUM_INDIRECT_BLOCKS;
+        while (curr_num < num_blocks && ptr != end) {
+          if (!get_block(*ptr, &double_indirect_block)) return FS_NOT_FOUND;
+          uint32_t* double_ptr = (uint32_t*)double_indirect_block->get();
+          uint32_t* double_end = double_ptr + NUM_INDIRECT_BLOCKS;
+          while (curr_num < num_blocks && double_ptr != double_end) {
+            if (!get_block(*double_ptr, &triple_indirect_block))
+              return FS_NOT_FOUND;
+            uint32_t* triple_ptr = (uint32_t*)triple_indirect_block->get();
+            uint32_t* triple_end = triple_ptr + NUM_INDIRECT_BLOCKS;
+            while (curr_num < num_blocks && triple_ptr != triple_end) {
+              if (!free_block(*triple_ptr)) return FS_NOT_FOUND;
+              triple_ptr++;
+              curr_num++;
+            }
+            free_block(*double_ptr);
+            double_ptr++;
+          }
+          free_block(*ptr);
+          ptr++;
+        }
+        if (!free_block(inode->i_block[i])) return FS_NOT_FOUND;
+      }
+    }
   }
-
+  DEBUG("Finish deleting INODE %u", index);
   free_inode(index);
   return FS_SUCCESS;
 }
