@@ -1,9 +1,9 @@
 #ifndef NAIVEFS_INCLUDE_COMMON_H_
 #define NAIVEFS_INCLUDE_COMMON_H_
 
+#include <errno.h>
 #include <stdint.h>
 #include <sys/time.h>
-#include <errno.h>
 
 #include <algorithm>
 
@@ -101,6 +101,8 @@ inline int Code2Errno(RetCode code) {
   }
   return 0;
 }
+
+#define NO_LOG 1
 }  // namespace naivefs
 
 #endif

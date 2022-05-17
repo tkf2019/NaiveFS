@@ -82,22 +82,22 @@ void test_filesystem() {
   INFO("%d", fs->inode_create("/home", &home_inode, S_IFDIR));
   ext2_inode *test_inode;
   INFO("%d", fs->inode_create("/home/test.txt", &test_inode, S_IFREG));
-  ext2_inode *test2_inode;
-  INFO("%d", fs->inode_create("/home/test2.txt", &test2_inode, S_IFREG));
-  ext2_inode *home2_inode;
-  INFO("%d", fs->inode_create("/home/tmp", &home2_inode, S_IFDIR));
-  ext2_inode *test3_inode;
-  INFO("%d", fs->inode_create("/home/tmp/test.txt", &test3_inode, S_IFREG));
-  INFO("%d", fs->inode_lookup("/home/tmp/test.txt", &test3_inode));
-  INFO("%d", fs->inode_unlink("/home/tmp"));
-  INFO("%d", fs->inode_lookup("/home/tmp/test.txt", &test3_inode));
-  // ext2_inode *d_test2_inode;
-  INFO("%d", fs->inode_link("/home/test2.txt", "/home/test3.txt"));
-  INFO("%d", fs->inode_unlink("/home/test2.txt"));
-  INFO("%d", fs->inode_lookup("/home/test2.txt", &test2_inode));
-  INFO("%d", fs->inode_create("/home/test2.txt", &test2_inode, S_IFREG));
-  INFO("%d", fs->inode_create("/home/tmp2", &home2_inode, S_IFDIR));
-  INFO("%d", fs->inode_unlink("/home"));
+  // ext2_inode *test2_inode;
+  // INFO("%d", fs->inode_create("/home/test2.txt", &test2_inode, S_IFREG));
+  // ext2_inode *home2_inode;
+  // INFO("%d", fs->inode_create("/home/tmp", &home2_inode, S_IFDIR));
+  // ext2_inode *test3_inode;
+  // INFO("%d", fs->inode_create("/home/tmp/test.txt", &test3_inode, S_IFREG));
+  // INFO("%d", fs->inode_lookup("/home/tmp/test.txt", &test3_inode));
+  // INFO("%d", fs->inode_unlink("/home/tmp"));
+  // INFO("%d", fs->inode_lookup("/home/tmp/test.txt", &test3_inode));
+  // // ext2_inode *d_test2_inode;
+  // INFO("%d", fs->inode_link("/home/test2.txt", "/home/test3.txt"));
+  // INFO("%d", fs->inode_unlink("/home/test2.txt"));
+  // INFO("%d", fs->inode_lookup("/home/test2.txt", &test2_inode));
+  // INFO("%d", fs->inode_create("/home/test2.txt", &test2_inode, S_IFREG));
+  // INFO("%d", fs->inode_create("/home/tmp2", &home2_inode, S_IFDIR));
+  // INFO("%d", fs->inode_unlink("/home"));
   // for (int i = 0; i < 4096; ++i) {
   //   ext2_inode *dir;
   //   fs->inode_create((std::string("/home/dir") +
@@ -110,7 +110,13 @@ void test_filesystem() {
   //   std::to_string(i)).c_str(),
   //                    &dir);
   // }
+  for (int i = 0; i < 32768; ++i) {
+    naivefs::Block *block;
+    uint32_t index;
+    fs->alloc_block(&block, &index, test_inode);
+  }
   delete fs;
+  naivefs::disk_close();
 }
 
 int main(int argc, char *argv[]) {

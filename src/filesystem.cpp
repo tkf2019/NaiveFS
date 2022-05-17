@@ -621,7 +621,7 @@ bool FileSystem::alloc_block(Block** block, uint32_t* index) {
 
   uint32_t block_group_index;
   // allocated by block group
-  char __a[BLOCK_SIZE] = {0};
+  // char __a[BLOCK_SIZE] = {0};
   for (auto bg : block_groups_) {
     if (bg.second->get_desc()->bg_free_blocks_count) {
       if (bg.second->alloc_block(block, index)) {
@@ -631,7 +631,7 @@ bool FileSystem::alloc_block(Block** block, uint32_t* index) {
     }
   }
 
-  ASSERT(memcmp(*block, __a, BLOCK_SIZE) == 0);
+  // ASSERT(memcmp(*block, __a, BLOCK_SIZE) == 0);
 
   // create a new block group
   alloc_block_group(&block_group_index);

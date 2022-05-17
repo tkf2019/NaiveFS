@@ -49,13 +49,10 @@ class BlockCache {
     INFO("block cache release %d", node->index_);
     if (node->dirty_) {
       // write back modified block
-      INFO("block cache release %d dirty", node->index_);
       node->block_->flush();
-      // release the memory
-      delete node->block_;
-    } else delete node->block_;
-    // push into the pool
-    free_entries_.push_back(node);
+    }
+    // release the memory
+    delete node->block_;
   }
 
   inline void attach(Node* node) {

@@ -8,7 +8,7 @@ void SuperBlock::init_super_block() {
       DEBUG("Find unintialized file system");
 
       super_->s_log_block_size = LOG_BLOCK_SIZE;
-      super_->s_blocks_per_group = TOTAL_BLOCKS_PER_GROUP;
+      super_->s_blocks_per_group = BLOCKS_PER_GROUP;
       super_->s_inodes_per_group = INODES_PER_GROUP;
       // 1 inode bitmap, 1 block bitmap, 1 inode table block, no data blocks
       super_->s_blocks_count = 3;
