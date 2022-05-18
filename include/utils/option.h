@@ -8,6 +8,9 @@ struct options {
   // const char *filename;
   // const char *contents;
   int show_help;
+  int begin_check;
+  int init_flag;
+  const char* password;
 };
 extern options global_options;
 }  // namespace naivefs

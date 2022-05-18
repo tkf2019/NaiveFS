@@ -22,7 +22,7 @@ int disk_open() {
   disk_fd = open(DISK_NAME, O_DIRECT | O_NOATIME | O_RDWR);
   if (disk_fd < 0) {
     ERR("Failed to open %s: %s", DISK_NAME, strerror(errno));
-    return -errno;
+    return errno;
   }
   return 0;
 }
@@ -31,7 +31,7 @@ int disk_close() {
   int ret = close(disk_fd);
   if (ret < 0) {
     ERR("Failed to close %s: %s", DISK_NAME, strerror(errno));
-    return -errno;
+    return errno;
   }
   return 0;
 }

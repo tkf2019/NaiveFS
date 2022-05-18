@@ -1,19 +1,23 @@
 #include <vector>
 
 #include "operation.h"
+#include "crypto.h"
+#include "utils/option.h"
 
 namespace naivefs {
 
 FileSystem* fs;
 OpManager* opm;
 std::shared_mutex _big_lock;
+extern Auth* auth;
 
 void* fuse_init(struct fuse_conn_info* info, fuse_config* config) {
   INFO("INIT");
   INFO("Using FUSE protocol %d.%d", info->proto_major, info->proto_minor);
   (void)config;
-
+  
   disk_open();
+  auth = new Auth(global_options.password);
   fs = new FileSystem();
   opm = new OpManager();
 

@@ -1,11 +1,15 @@
 #include "filesystem.h"
+#include "utils/option.h"
 
 
 #define FUSE_USE_VERSION 31
 #include <fuse.h>
 
+#include "crypto.h"
 
 namespace naivefs {
+
+extern Auth* auth;
 
 /**
  * @brief Initialize a new inode
@@ -33,6 +37,7 @@ static void inode_init(ext2_inode* inode) {
   inode->i_dir_acl = 0;
   inode->i_faddr = 0;
   inode->i_dtime = 0;
+  inode->i_mode = 0;
 }
 
 /**
@@ -59,8 +64,10 @@ FileSystem::FileSystem()
       dentry_cache_(new DentryCache(BLOCK_CACHE_SIZE)) {
   DEBUG("Initialize file system");
 
+  if(auth == nullptr) ERR("Auth is nullptr");
+
   // init first block group
-  block_groups_[0] = new BlockGroup(super_block_->get_group_desc(0));
+  block_groups_[0] = new BlockGroup(super_block_->get_group_desc(0), global_options.init_flag);
 
   // init root inode
   if (!block_groups_[0]->get_inode(ROOT_INODE, &root_inode_)) {
@@ -74,6 +81,7 @@ FileSystem::FileSystem()
     // root directory: cannot be written or executed
     root_inode_->i_mode =
         EXT2_S_IFDIR | EXT2_S_IRUSR | EXT2_S_IRGRP | EXT2_S_IROTH | EXT2_S_IWUSR | EXT2_S_IXGRP | EXT2_S_IXOTH | EXT2_S_IXUSR;
+    INFO("inode: %d, %d", root_inode_, root_inode_->i_mode);
   } else {
     inode_display(root_inode_);
   }
@@ -191,6 +199,7 @@ RetCode FileSystem::inode_lookup(const Path& path, ext2_inode** inode,
                                  DentryCache::Node** cache_ptr) {
   if (!path.valid()) return FS_INVALID;
   *inode = root_inode_;
+  INFO("inode: %d, %d", *inode, *inode ? (*inode)->i_mode : 0);
   if (path.empty()) {
     if (inode_index != nullptr) *inode_index = ROOT_INODE;
     if (cache_ptr != nullptr) *cache_ptr = nullptr;
@@ -217,6 +226,7 @@ RetCode FileSystem::inode_lookup(const Path& path, ext2_inode** inode,
         return FS_NDIR_ERR;
 
       result = -1;
+      INFO("inode: %d, %d", *inode, *inode ? (*inode)->i_mode : 0);
       visit_inode_blocks(
           *inode, [this, elem, &result, &inode](
                       __attribute__((unused)) uint32_t index, Block* block) {
@@ -862,6 +872,11 @@ bool FileSystem::alloc_block_group(uint32_t* index) {
   // We assume disk space will not drain out
   ASSERT(sizeof(ext2_super_block) + *index * sizeof(ext2_group_desc) <=
          BLOCK_SIZE);
+  if (sizeof(ext2_super_block) + *index * sizeof(ext2_group_desc) >
+         BLOCK_SIZE) {
+      ERR("super block is full.");
+      return false;
+  }
   ext2_group_desc* desc =
       (ext2_group_desc*)(super_block_->get() + sizeof(ext2_super_block) +
                          *index * sizeof(ext2_group_desc));

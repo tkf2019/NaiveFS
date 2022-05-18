@@ -11,11 +11,14 @@
 #include "block.h"
 #include "common.h"
 
+#include <atomic>
+
 namespace naivefs {
 
 class BlockCache {
   struct Node {
-    bool dirty_;
+    std::atomic<bool> dirty_;
+    std::atomic<bool> bit_; // second chance
     uint32_t index_;
     Block* block_;
     Node* prev_;
@@ -66,6 +69,7 @@ class BlockCache {
   std::vector<Node*> free_entries_;
   Node* entries_;
   Node *head_, *tail_;
+  Node *hand_; // clock algorithm
   size_t size_;
 };
 

@@ -10,6 +10,7 @@ BlockCache::BlockCache(size_t size)
   head_->next_ = tail_;
   tail_->prev_ = head_;
   tail_->next_ = nullptr;
+  hand_ = head_;
 }
 
 BlockCache::~BlockCache() {
@@ -44,7 +45,15 @@ void BlockCache::insert(uint32_t index, Block* block, bool dirty) {
   auto iter = map_.find(index);
   if (iter == map_.end()) {
     if (free_entries_.empty()) {
-      node = tail_->prev_;
+      // it's expected that there's at least 2 elements in the list
+      // so hand_ always in the list
+      while(true) {
+        hand_ = hand_->next_ == tail_ ? head_ : hand_->next_;
+        if(hand_->bit_ || hand_ == head_) hand_->bit_ = false;
+        else break;
+      }
+      node = hand_;
+      hand_ = hand_->next_ == tail_ ? head_ : hand_->next_;
       ASSERT(node != nullptr);
       detach(node);
       release(node);
@@ -57,16 +66,16 @@ void BlockCache::insert(uint32_t index, Block* block, bool dirty) {
     node->index_ = index;
     node->block_ = block;
     node->dirty_ = dirty;
+    node->bit_ = true;
     map_[index] = node;
     attach(node);
   } else {
     // INFO("block cache insert: iter exists");
     node = iter->second;
-    node->dirty_ |= dirty;
+    if(dirty) node->dirty_ = true;
     ASSERT(node != nullptr);
     ASSERT(node->block_ == block);
-    detach(node);
-    attach(node);
+    node->bit_ = true;
   }
 }
 
@@ -80,9 +89,10 @@ Block* BlockCache::get(uint32_t index, bool dirty) {
     ASSERT(node != nullptr);
     ASSERT(node->block_ != nullptr);
     ASSERT(node->index_ == index);
+    node->bit_ = true;
     // detach(node);
     // attach(node);
-    node->dirty_ |= dirty;
+    if(dirty) node->dirty_ = true;
     return node->block_;
   }
 }
@@ -95,6 +105,7 @@ void BlockCache::remove(uint32_t index) {
   } else {
     Node* node = iter->second;
     ASSERT(index == node->index_);
+    if(hand_ == node) hand_ = hand_->next_ == tail_ ? head_ :  hand_->next_;
     detach(node);
     release(node);
     map_.erase(node->index_);

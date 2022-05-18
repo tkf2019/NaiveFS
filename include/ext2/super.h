@@ -3,6 +3,7 @@
 
 #include "basic.h"
 
+
 /*
  * Structure of a blocks group descriptor
  */
@@ -89,7 +90,8 @@ struct ext2_super_block {
   __u16 s_reserved_word_pad;
   __le32 s_default_mount_opts;
   __le32 s_first_meta_bg; /* First metablock block group */
-  __u32 s_reserved[190];  /* Padding to the end of the block */
+  __u8 s_auth_string[64];
+  __u32 s_reserved[174];  /* Padding to the end of the block */
 };
 
 #endif
