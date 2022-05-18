@@ -297,25 +297,32 @@ class FileStatus {
 - `--password=<s>` 表示输入密码，可以没有这个选项，密码默认为空。
 
 挂载：
+
 ![](pics/init1.png)
 
 基础操作：
+
 ![](pics/basic1.PNG)
 
 软硬链接：
+
 ![](pics/basic2.PNG)
 
 使用Github:
+
 ![](pics/git1.PNG)
 ![](pics/git2.PNG)
 
 加密：
+
 ![](pics/pwd1.png)
 
 权限管理：
+
 ![](pics/chown.png)
 
 
 RocksDB测试，使用examples/multi_processes_example，改了一点参数。
+
 ![](pics/rocksdb.PNG)
 
