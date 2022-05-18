@@ -4,15 +4,15 @@
 
 ----------------
 
-- **参考资料**：libfuse相关文档及代码注释，ext2/ext4文件系统规范，linux用户库实现
+- **参考资料**：libfuse相关文档及代码注释，ext2/ext4文件系统规范，linux用户库实现。
 - **支持功能**（运行截图参见附录）：
-  - **Baseline**:实现了大部分fuse功能函数，并支持大部分命令操作例如ls、cat、touch、mkdir、ln（-s）等
-  - **Functionality**:可在文件系统内从仓库拉取、编译并运行KV存储引擎（执行并通过所有test脚本）;可在文件系统内从仓库拉取、编译并运行rocksdb等大型开源项目
-  - **Consistency**：TODO
-  - **Durability**：fsync成功后或使用`fusermount`取消对文件夹的挂载后（DESTROY请求），数据和状态会被写入到虚拟磁盘
+  - **Baseline**:实现了大部分fuse功能函数，并支持大部分命令操作例如ls、cat、touch、mkdir、ln、ln -s、mv、rmdir、rm、chmod、chown、cp、find等，且支持常用软件的运行，如vim、git、g++、cmake等。
+  - **Functionality**:可在文件系统内从仓库拉取、编译并运行KV存储引擎（执行并通过所有test脚本）;可在文件系统内从仓库拉取、编译并运行rocksdb等大型开源项目。
+  - **Consistency**：在成功fsync后保证状态是valid，如果在中途断电则不保证。但可以使用--check选项来检查文件系统状态。
+  - **Durability**：fsync成功后或使用`fusermount`取消对文件夹的挂载后（DESTROY请求），数据和状态会被写入到虚拟磁盘。
   - **Security**:
-    - **权限检查**：TODO
-    - **加密**：TODO
+    - **权限检查**：支持
+    - **加密**：支持
   - **Performance**: TODO
 - **目录结构**：
 
@@ -197,6 +197,55 @@ class FileSystem {
 - `free_inode/free_block`：调用对应flush或delete函数，释放bitmap中的空间
 ##### 3.FileStatus
 
+```C++
+class FileStatus {
+ public:
+  class IndirectBlockPtr {
+   public:
+    uint32_t id_;
+    IndirectBlockPtr() { id_ = 0; }
+    IndirectBlockPtr(uint32_t indirect_block_id) : id_(indirect_block_id) {}
+    bool seek(off_t off, uint32_t &block_id) {
+      Block *blk;
+      if (!fs->get_block(id_, &blk)) return false;
+      block_id = (reinterpret_cast<uint32_t *>(blk->get()))[off];
+      return true;
+    }
+  };
+  InodeCache *inode_cache_;
+  FSListPtr<FileStatus*>* fslist_ptr_;
+  bool cache_update_flag_;
+  uint32_t block_id_;                 
+  uint32_t block_id_in_file_;    
+  IndirectBlockPtr indirect_block_[3];  
+  std::shared_mutex rwlock;             
+  FileStatus();
+  ~FileStatus() = default;
+
+  void rel();
+  int next_block();
+  int seek(uint32_t new_block_id_in_file);
+  int bf_seek(uint32_t new_block_id_in_file);
+  int _upd_cache();
+  void init_seek();
+  int copy_to_buf(char *buf, size_t offset, size_t size);
+  int write(const char *buf, size_t offset, size_t size, bool append_flag = false);
+  int append(const char *buf, size_t offset, size_t size);
+};
+```
+
+- `inode_cache_`会在初始化的时候指向对应的`InodeCache`。
+- `fslist_ptr_`是`InodeCache`中的`File Status*`的链表指针。
+- `cache_update_flag_`表示是否需要更新本地`indirect_block_`缓存。
+- 由于大部分文件访问都是连续的block访问或者是某个block内部的小范围访问，所以`block_id_`记一个当前block的index。对于大文件，不可能每次都去查indirect block，所以再用`indirect_block_`缓存各级的indirect block。
+- `block_id_in_file_`是当前文件指针在文件的第几个block。
+- `rwlock`用来支持并发访问。
+- `next_block`用于快速通过现在的`block_id_`、`indirect_block_`、`block_id_in_file_`查询到下一个block。
+- `seek`、`bf_seek`用于找某个块。其中`seek`使用缓存，`bf_seek`不使用任何缓存，直接读`InodeCache`。
+- `_upd_cache`用于update本地的cache。
+- `copy_to_buf`、`write`读写文件。总的来说，可以并发地读文件，但是每个`FileStatus`每次只能有一个线程进行`write`。如果有多个`FileStatus`进行`write`，那么每次只有一个能修改`InodeCache`。
+- `append`如果使用了`O_APPEND`的flag，就会先重置`offset`再调用`write`。
+
 #### 三、优化设计
 
 ##### 1.DentryCache
@@ -213,20 +262,38 @@ class FileSystem {
 
 ##### 3.InodeCache
 
-TODO
+- 对多个`FileStatus`共用的inode进行缓存，因为`FileStatus`需要读取指向block的指针。如果每次都用`get_inode`查会大大降低性能。
+- 在必要的时候使用commit把缓存提交。
+- 使用`OpManager`对`InodeCache`进行管理，记录引用计数，如果一个`InodeCache`没有被任何`FileStatus`引用，就将它销毁。
+- 用读写锁（`std::shared_mutex`）管理并发访问，当`FileStatus`只读时用共享锁，否则用互斥锁。在读文件时是共享锁，可以支持并发地读取。在写文件时如果要append新的block，则要将共享锁换成互斥锁，否则只需要共享锁。大体上支持并发的读写。
+- 当一个`InodeCache`被更新时，它会通知所有引用它的`FileStatus`。这是用一个记录`FileStatus*`的链表实现的。
 
 #### 四、其他实现
 
-TODO
+##### 1. Auth
+
+- 使用AES256CBC对Inode bitmap、Block bitmap、Inode table、Block进行加密，在Super block里记一个长为64的字符串，初始化时如果这个字符串解析正确，则说明密码正确，否则返回解密失败。
+- 只在从磁盘中读、向磁盘写的时候加密，其他时候不加密。
+
+##### 2. Check FileSystem
+
+- 按照文件系统初始化的顺序读取block，检查中间的数值是否符合范围。
+- 遍历整个文件系统，检查是否出现矛盾。
+
 
 #### 五、总结
 
 - 根据老师课上讲的文件系统进行架构和设计，思路看起来比较直接和简单，但实际实现的过程中遇到了很多边界条件，这些问题有一部分没能在编写代码的时候就考虑周全，在后续运行更大程序时才突然出现bug，给调试带来了很大挑战
-- 由于fuse功能函数是与内核有关的回调函数，无法输出到终端进行调试；从网上找的Logger极大地方便了调试，可以迅速定位问题出现的位置和信息，建议布置作业时直接提供调试环境
+- 由于fuse功能函数是与内核有关的回调函数，无法输出到终端进行调试，也无法用gdb；从网上找的Logger极大地方便了调试，可以迅速定位问题出现的位置和信息，建议布置作业时直接提供调试环境
 - 分工：
-  - 田凯夫：Block、FileSystem、Cache、部分fuse功能函数
-  - TODO
+  - 田凯夫：Block、FileSystem、Cache、fuse_link、fuse_unlink、fuse_init、fuse_destroy、fuse_symlink、fuse_readlink
+  - 袁方舟：FileStatus、OpManager、InodeCache、Auth、fuse_attr、fuse_chmod、fuse_read、fuse_write、fuse_mkdir、fuse_rmdir、fuse_readdir、fuse_create、fuse_open、fuse_rename、fuse_utimens、fuse_release、fuse_fsync、fuse_chown、fuse_flush、check_filesystem
 
 #### 六、附录（运行截图）
 
-TODO
+使用方法：首先必须准备一个比较大的文件，放在/tmp/disk。
+- `--init` 表示重置文件系统
+- `--check` 表示检查文件系统，不能和`--init`共用。
+- `--password=<s>` 表示输入密码，可以没有这个选项，密码默认为空。
+
+
