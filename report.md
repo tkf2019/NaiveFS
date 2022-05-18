@@ -314,6 +314,9 @@ class FileStatus {
 
 ![](pics/git2.PNG)
 
+KV:
+![](pics/kv.png)
+
 加密：
 
 ![](pics/pwd1.png)
