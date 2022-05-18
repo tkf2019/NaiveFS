@@ -316,6 +316,8 @@ class FileStatus {
 
 KV:
 ![](pics/kv.png)
+![](pics/kv1.png)
+![](pics/kv2.png)
 
 加密：
 
