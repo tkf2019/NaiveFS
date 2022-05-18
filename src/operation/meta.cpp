@@ -275,12 +275,12 @@ int fuse_fsync(const char* path, int datasync, struct fuse_file_info* fi) {
   if (!fd) return -EBADF;
 
   if (datasync) {
-    fs->flush(fd->inode_cache_->inode_id_);
+    fs->flush();
   } else {
     fd->inode_cache_->lock_shared();
     fd->inode_cache_->commit();
     fd->inode_cache_->unlock_shared();
-    fs->flush(fd->inode_cache_->inode_id_);
+    fs->flush();
   }
   return 0;
 }
