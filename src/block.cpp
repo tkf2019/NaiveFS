@@ -27,6 +27,8 @@ void SuperBlock::init_super_block() {
     // set state to normal
     super_->s_state = FSState::NORMAL;
 
+
+    super_->s_group = 1;
     // init first block group
     ext2_group_desc* desc = (ext2_group_desc*)(data_ + sizeof(ext2_super_block));
     desc->bg_inode_bitmap = BLOCK_SIZE;

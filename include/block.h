@@ -116,6 +116,7 @@ class SuperBlock : public Block {
 
   inline uint32_t num_block_groups() {
     DEBUG("[SuperBlock] BLOCKS COUNT: %u", super_->s_blocks_count);
+    return super_->s_group;
     uint32_t block_n = (super_->s_blocks_count + super_->s_blocks_per_group - 1) / super_->s_blocks_per_group;
     uint32_t inode_n = (super_->s_inodes_count + super_->s_inodes_per_group - 1) / super_->s_inodes_per_group;
     uint32_t n = std::max(inode_n, block_n);

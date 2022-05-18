@@ -57,9 +57,10 @@ static int check_sb(ext2_super_block* sb) {
       uint32_t block_n = (super_->s_blocks_count + super_->s_blocks_per_group - 1) / super_->s_blocks_per_group;
       uint32_t inode_n = (super_->s_inodes_count + super_->s_inodes_per_group - 1) / super_->s_inodes_per_group;
       uint32_t n = std::max(inode_n, block_n);
-      n = n ? n : 1;
+      n = super_->s_group;
       printf("N BlOCK GROUPS: %i\n", n);
       printf("INODE SIZE: %i\n", super_->s_inode_size);
+
       FSC_ASSERT(check_num("INODE SIZE", super_->s_inode_size, sizeof(ext2_inode), sizeof(ext2_inode)));
       printf("INODES PER GROUP: %i\n", super_->s_inodes_per_group);
       FSC_ASSERT(check_num("INODES PER GROUP", super_->s_inodes_per_group, INODES_PER_GROUP, INODES_PER_GROUP));

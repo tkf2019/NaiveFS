@@ -674,6 +674,7 @@ bool FileSystem::alloc_inode(ext2_inode** inode, uint32_t* index, mode_t mode) {
 
   // create a new block group
   alloc_block_group(&block_group_index);
+  super_block_->get_super()->s_group++;
   if (block_groups_[block_group_index]->alloc_inode(inode, index, mode))
     goto alloc_finished;
 
@@ -706,6 +707,8 @@ bool FileSystem::alloc_block(Block** block, uint32_t* index) {
 
   // create a new block group
   alloc_block_group(&block_group_index);
+  super_block_->get_super()->s_group++;
+  //super_block_->get_super()->s_blocks_count += super_block_->blocks_per_group();
   if (block_groups_[block_group_index]->alloc_block(block, index))
     goto alloc_finished;
 

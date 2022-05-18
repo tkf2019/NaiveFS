@@ -91,7 +91,8 @@ struct ext2_super_block {
   __le32 s_default_mount_opts;
   __le32 s_first_meta_bg; /* First metablock block group */
   __u8 s_auth_string[64];
-  __u32 s_reserved[174];  /* Padding to the end of the block */
+  __u32 s_group;
+  __u32 s_reserved[173];  /* Padding to the end of the block */
 };
 
 #endif
