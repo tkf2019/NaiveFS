@@ -3,17 +3,19 @@
 #include <iostream>
 
 #include "cache.h"
+#include "crypto.h"
 #include "operation.h"
 #include "utils/bitmap.h"
 #include "utils/disk.h"
 #include "utils/option.h"
 #include "utils/path.h"
-#include "crypto.h"
 
 #define OPTION(t, p) \
   { t, offsetof(naivefs::options, p), 1 }
-static const struct fuse_opt option_spec[] = {OPTION("-h", show_help), OPTION("--help", show_help), OPTION("--password=%s", password),
-                                              OPTION("--check", begin_check), OPTION("--init", init_flag), FUSE_OPT_END};
+static const struct fuse_opt option_spec[] = {
+    OPTION("-h", show_help),           OPTION("--help", show_help),
+    OPTION("--password=%s", password), OPTION("--check", begin_check),
+    OPTION("--init", init_flag),       FUSE_OPT_END};
 static struct fuse_operations ops;
 static void show_help(const char *progname) {
   printf("usage: %s [options] <mountpoint>\n\n", progname);
@@ -27,7 +29,8 @@ static void show_help(const char *progname) {
 
 namespace naivefs {
 extern int check_filesystem();
-options global_options = {.show_help = 0, .begin_check = 0, .init_flag = 0, .password = 0};
+options global_options = {
+    .show_help = 0, .begin_check = 0, .init_flag = 0, .password = 0};
 }  // namespace naivefs
 
 void test_disk() {
@@ -131,19 +134,21 @@ int main(int argc, char *argv[]) {
 
   int ret;
   fuse_args args = FUSE_ARGS_INIT(argc, argv);
-  if (fuse_opt_parse(&args, &naivefs::global_options, option_spec, NULL) == -1) return 1;
+  if (fuse_opt_parse(&args, &naivefs::global_options, option_spec, NULL) == -1)
+    return 1;
 
   if (naivefs::global_options.show_help) {
     show_help(argv[0]);
     assert(fuse_opt_add_arg(&args, "--help") == 0);
     args.argv[0][0] = '\0';
   }
-  if (naivefs::global_options.password && strlen(naivefs::global_options.password) > 256) {
+  if (naivefs::global_options.password &&
+      strlen(naivefs::global_options.password) > 256) {
     printf("password too long\n");
     return 1;
   }
   if (naivefs::global_options.begin_check) {
-    if(naivefs::global_options.init_flag) {
+    if (naivefs::global_options.init_flag) {
       printf("--check can't be used with --init");
       return 1;
     }

@@ -4,10 +4,10 @@
 #include <sys/time.h>
 
 #include <functional>
+#include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <unordered_map>
-#include <shared_mutex>
-#include <mutex>
 #include <vector>
 
 #include "block.h"
@@ -110,18 +110,19 @@ class FileSystem {
 
   /**
    * @brief Get the block object, and do copy in the lock
-   * 
-   * @param index 
-   * @param block 
+   *
+   * @param index
+   * @param block
    * @param dirty R/W, R is false and W is true
    * @param offset src is blk->get() + offset
    * @param buf dst
-   * @param copy_size  
-   * @return true 
-   * @return false 
+   * @param copy_size
+   * @return true
+   * @return false
    */
-  bool get_block(uint32_t index, Block** block, bool dirty = false, off_t offset = 0, const char* buf = nullptr, size_t copy_size = 0);
-
+  bool get_block(uint32_t index, Block** block, bool dirty = false,
+                 off_t offset = 0, const char* buf = nullptr,
+                 size_t copy_size = 0);
 
   /**
    * @brief Allocate a new inode in the file system. This operation changes: 1.
