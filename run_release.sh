@@ -12,4 +12,4 @@ fallocate --length=16g /tmp/disk
 
 mkdir test
 fusermount -u test
-./NaiveFS test
+./NaiveFS --init test
