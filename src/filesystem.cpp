@@ -105,22 +105,31 @@ FileSystem::~FileSystem() {
 }
 
 void FileSystem::flush() {
+  
   super_block_->flush();
 
   for (auto bg : block_groups_) {
+    ASSERT(bg.second != nullptr);
     bg.second->flush();
   }
+
+  ASSERT(block_cache_ != nullptr);
 
   block_cache_->flush();
 }
 
 void FileSystem::flush(uint32_t inode_index) {
+  INFO("flush 1");
   super_block_->flush();
 
+  INFO("flush 2");
   for (auto bg : block_groups_) {
+    ASSERT(bg.second != nullptr);
     bg.second->flush();
   }
 
+  INFO("flush 3");
+  ASSERT(block_cache_ != nullptr);
   block_cache_->flush(inode_index);
 }
 

@@ -99,14 +99,17 @@ BlockGroup::~BlockGroup() {
 }
 
 void BlockGroup::flush() {
+  INFO("begin to flush block group");
   ASSERT(block_bitmap_ != nullptr);
   block_bitmap_->flush();
   ASSERT(inode_bitmap_ != nullptr);
   inode_bitmap_->flush();
   for (auto item : inode_table_) {
     ASSERT(item.second != nullptr);
+    INFO("begin to flush inode table");
     item.second->flush();
   }
+  INFO("block group flushed");
 }
 
 bool BlockGroup::get_inode(uint32_t index, ext2_inode** inode) {

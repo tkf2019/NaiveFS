@@ -20,6 +20,7 @@ BlockCache::~BlockCache() {
 }
 
 void BlockCache::flush() {
+  INFO("block cache flush");
   for (auto& node : map_) {
     if (node.second->dirty_) {
       DEBUG("[BlockCache] Flush block %u", node.second->index_);
@@ -27,11 +28,12 @@ void BlockCache::flush() {
       node.second->dirty_ = false;
     }
   }
+  INFO("block cache flushed");
 }
 
 void BlockCache::flush(uint32_t inode_index) {
   auto iter = map_.find(inode_index);
-  if (iter == map_.end() && iter->second->dirty_) {
+  if (iter != map_.end() && iter->second->dirty_) {
     ASSERT(inode_index == iter->second->index_);
     DEBUG("[BlockCache] Flush block %u", iter->second->index_);
     iter->second->block_->flush();

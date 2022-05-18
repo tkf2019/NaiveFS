@@ -57,6 +57,7 @@ class Block {
 
   int flush() {
     if (auth->flag()) {
+      INFO("flush auth");
       if (offset_) {
         auto ptr = auth->write(data_, BLOCK_SIZE);
         if (!ptr)
@@ -78,7 +79,9 @@ class Block {
         }
       }
     } else {
-      disk_write(offset_, BLOCK_SIZE, data_);
+      INFO("flush not auth");
+      ASSERT(data_ != nullptr);
+      return disk_write(offset_, BLOCK_SIZE, data_);
     }
     return 0;
   }

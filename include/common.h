@@ -50,7 +50,7 @@ enum FSState { UNINIT = 0x0, NORMAL = 0x1, UNAUTH = 0x2 };
 #define ACCESS_INODE(__i) UPDATE_TIME(__i->i_atime)
 #define MODIFY_INODE(__i) UPDATE_TIME(__i->i_mtime)
 
-#define BLOCK_CACHE_SIZE 1024  // TODO: maybe larger ?
+#define BLOCK_CACHE_SIZE 32768  // TODO: maybe larger ?
 
 // dentry types
 
