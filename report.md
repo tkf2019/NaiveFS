@@ -311,6 +311,7 @@ class FileStatus {
 使用Github:
 
 ![](pics/git1.PNG)
+
 ![](pics/git2.PNG)
 
 加密：
