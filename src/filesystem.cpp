@@ -743,7 +743,6 @@ bool FileSystem::alloc_block(Block** block, uint32_t* index,
   uint32_t num_blocks = super_block_->num_aligned_blocks(inode->i_blocks);
   Block* indirect_block = nullptr;
   if (!alloc_block(block, &block_index)) goto error_occured;
-  memset((*block)->get(), 0, BLOCK_SIZE);
   
   if (num_blocks < MAX_DIR_BLOCKS) {
     inode->i_block[num_blocks] = block_index;
