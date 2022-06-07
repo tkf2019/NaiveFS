@@ -1,5 +1,6 @@
 \documentclass{beamer}
-\usepackage{ctex, hyperref}
+\usepackage[UTF8]{ctex}
+\usepackage{hyperref}
 \usepackage[T1]{fontenc}
 
 % other packages
@@ -74,7 +75,7 @@
 
 \begin{figure}[htpb]
     \centering
-    \includegraphics[width=0.5\linewidth]{pic/img.drawio.png}
+    \includegraphics[width=0.5\linewidth]{pic/{img.drawio}.png}
     \caption{总体架构}
 \end{figure}
 
@@ -98,12 +99,6 @@
 \end{itemize}
 \end{frame}
 
-\begin{frame}{\textbf{FileStatus}}
-\begin{itemize}[<+-| alert@+>]
-    \item 
-\end{itemize}
-\end{frame}
-
 \begin{frame}{优化设计}
 \begin{itemize}[<+-| alert@+>]
     \item \textbf{Dentry Cache}：多叉树结构，每一层采用环形链表，父节点指向最新被访问到的节点
@@ -112,14 +107,41 @@
 \end{itemize}
 \end{frame}
 
+
+\begin{frame}{多线程设计}
+\begin{itemize}[<+-| alert@+>]
+    \item 除读写文件和只读操作以外都使用大互斥锁，防止元数据被错误修改
+    \item 允许多进程对多个File Handle进行多线程操作
+    \item 在所有的进程之间共享Inode的状态
+    \item 读写文件时维护\textbf{FileStatus}
+\end{itemize}
+\end{frame}
+
+\begin{frame}{\textbf{FileStatus}}
+\begin{itemize}[<+-| alert@+>]
+    \item 对访问的Inode进行缓存，记录上一次的访问时的位置和Indirect Block等，加速seek
+    \item 如果这次正好在上一次的下一个block，则直接读取相应位置的Block ID；否则，从上往下重新读取，如果已经被记录过则不必再读取
+    \item Inode缓存由多个进程共享，如果有进程更新了Inode，则其他进程也必须重新读入Inode。
+    \item 读文件：判断offset是否合法，然后对Inode缓存加共享锁。每次读取新的Block的时候视情况对FileSystem相关部分加锁
+    \item 写文件：判断是否需要改动Inode（如写的部分超出当前文件范围），再对Inode缓存加共享锁或互斥锁。
+\end{itemize}
+\end{frame}
+
+
 \section{拓展实现}
 
 \begin{frame}{加密}
-
+\begin{itemize}[<+-| alert@+>]
+    \item 使用AES256CBC mode对每个Block和Inode Block加密。
+    \item 在Super Block里设置一个特定的字符串，进入文件系统时对这个字符串解密
+    \item 如果解密出来是期望的结果就说明密码正确，否则密码错误。
+\end{itemize}
 \end{frame}
 
 \begin{frame}{权限检查}
-
+\begin{itemize}[<+-| alert@+>]
+    \item 使用EXT2的对应字段，按照权限规则检查
+\end{itemize}
 \end{frame}
 
 \begin{frame}
@@ -145,4 +167,4 @@
     \end{center}
 \end{frame}
 
-\end{document}
+\end{document} 
