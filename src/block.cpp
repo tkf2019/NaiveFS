@@ -79,7 +79,7 @@ int64_t BitmapBlock::alloc_new() {
   return i;
 }
 
-BlockGroup::BlockGroup(ext2_group_desc* desc, bool alloc) : desc_(desc) {
+BlockGroup::BlockGroup(ext2_group_desc* desc, uint32_t group_idx, bool alloc) : desc_(desc) {
   ASSERT(desc != nullptr);
 
   INFO("BLOCK BITMAP OFFSET: 0x%x", desc->bg_block_bitmap);
@@ -90,6 +90,7 @@ BlockGroup::BlockGroup(ext2_group_desc* desc, bool alloc) : desc_(desc) {
 
   block_bitmap_ = new BitmapBlock(desc->bg_block_bitmap, alloc);
   inode_bitmap_ = new BitmapBlock(desc->bg_inode_bitmap, alloc);
+  group_idx_ = group_idx;
 }
 
 BlockGroup::~BlockGroup() {
@@ -151,10 +152,9 @@ bool BlockGroup::alloc_inode(ext2_inode** inode, uint32_t* index, mode_t mode) {
   desc_->bg_free_inodes_count--;
   if (S_ISDIR(mode)) desc_->bg_used_dirs_count++;
 
-  if (index != nullptr) *index = ret;
+  if (index != nullptr) *index = ret + group_idx_ * INODES_PER_GROUP;
   ret = get_inode(ret, inode);
   memset((void*)(*inode), 0, sizeof(ext2_inode));
-  DEBUG("[BlockGroup] Alloc_inode %u, MODE: %d", ret, mode);
   (*inode)->i_mode = mode;
   return ret;
 }
@@ -167,7 +167,7 @@ bool BlockGroup::alloc_block(Block** block, uint32_t* index) {
   // update block group descriptor
   desc_->bg_free_blocks_count--;
 
-  if (index != nullptr) *index = ret;
+  if (index != nullptr) *index = ret + group_idx_ * BLOCKS_PER_GROUP;
   *block = new Block(data_block_offset(ret), true);
   return true;
 }
