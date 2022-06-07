@@ -8,7 +8,7 @@ make -j 4
 
 rm -rf /tmp/disk
 touch /tmp/disk
-fallocate --length=16g /tmp/disk
+fallocate --length=1g /tmp/disk
 
 mkdir test
 fusermount -u test

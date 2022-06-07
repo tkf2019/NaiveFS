@@ -8,22 +8,27 @@ int fuse_symlink(const char *src, const char *dst) {
   INFO("SYMLINK %s, %s", src, dst);
 
   ext2_inode *inode;
-  RetCode ret = fs->inode_lookup(src, &inode);
-  if (ret) return Code2Errno(ret);
+  RetCode ret;
+  // RetCode ret = fs->inode_lookup(src, &inode);
+  // if (ret) return Code2Errno(ret);
+
+  size_t src_len = strlen(src);
+  if (src_len > 4096) return -EINVAL;
 
   uint32_t inode_id;
   ret = fs->inode_create(dst, &inode, &inode_id, S_IFLNK);
+  INFO("MODE: %d, %d", inode->i_mode, inode_id);
   if (ret) return Code2Errno(ret);
-
-  size_t src_len = strlen(src);
 
   if (src_len <= sizeof(ext2_inode::i_block)) {
     memcpy(inode->i_block, src, src_len);
   } else {
     Block *block;
     uint32_t block_id;
-    if (!fs->alloc_block(&block, &block_id, inode))
+    if (!fs->alloc_block(&block, &block_id, inode)) {
+      INFO("fuckfuck");
       return Code2Errno(FS_ALLOC_ERR);
+    }
     fs->write_block(block, block_id, src, src_len);
   }
 
@@ -42,6 +47,7 @@ int fuse_readlink(const char *path, char *buf, size_t size) {
   if (inode->i_blocks == 0) {
     memcpy(buf, inode->i_block,
            std::min(size, strlen(reinterpret_cast<char *>(inode->i_block))));
+    INFO("The link: %s, %d, %d ", buf, inode_id, inode);
   } else {
     Block *block;
     if (!fs->get_block(inode->i_block[0], &block))

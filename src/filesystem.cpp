@@ -16,7 +16,7 @@ extern Auth* auth;
  *
  * @param inode inode points to the memory
  */
-static void inode_init(ext2_inode* inode) {
+static void inode_init(ext2_inode* inode, mode_t mode = 0) {
   // update time values of root inode
   timeval time;
   gettimeofday(&time, NULL);
@@ -37,7 +37,7 @@ static void inode_init(ext2_inode* inode) {
   inode->i_dir_acl = 0;
   inode->i_faddr = 0;
   inode->i_dtime = 0;
-  inode->i_mode = 0;
+  inode->i_mode = mode;
 }
 
 /**
@@ -91,6 +91,8 @@ FileSystem::FileSystem()
 }
 
 FileSystem::~FileSystem() {
+  if(global_options.begin_check)
+    return;
   super_block_->flush();
   delete super_block_;
 
@@ -164,11 +166,13 @@ RetCode FileSystem::inode_create(const Path& path, ext2_inode** inode,
 
   // allocate new inode
   if (!alloc_inode(inode, &inode_index, mode)) return FS_ALLOC_ERR;
-
+  INFO("[inode_create] MODE: %d", (*inode)->i_mode);
   RetCode dentry_ret =
       dentry_create(last_block, last_block_index, parent, last_item.first,
                     last_item.second, inode_index, mode);
   if (dentry_ret) return dentry_ret;
+
+  
 
   DEBUG("Create inode: %i,%s", inode_index,
         std::string(path.back().first).c_str());
@@ -665,8 +669,9 @@ bool FileSystem::alloc_inode(ext2_inode** inode, uint32_t* index, mode_t mode) {
   for (auto bg : block_groups_) {
     if (bg.second->get_desc()->bg_free_inodes_count) {
       if (bg.second->alloc_inode(inode, index, mode)) {
-        inode_init(*inode);
+        inode_init(*inode, mode);
         block_group_index = bg.first;
+        INFO("alloc success directly");
         goto alloc_finished;
       }
     }
@@ -733,7 +738,7 @@ bool FileSystem::alloc_block(Block** block, uint32_t* index,
   static std::shared_mutex m_;
   std::unique_lock<std::shared_mutex> lck(m_);
   ASSERT(inode != nullptr &&
-         (S_ISDIR(inode->i_mode) || S_ISREG(inode->i_mode)));
+         (S_ISDIR(inode->i_mode) || S_ISREG(inode->i_mode) || S_ISLNK(inode->i_mode)));
   uint32_t block_index, indirect_block_index;
   uint32_t num_blocks = super_block_->num_aligned_blocks(inode->i_blocks);
   Block* indirect_block = nullptr;

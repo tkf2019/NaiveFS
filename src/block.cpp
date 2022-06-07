@@ -154,6 +154,7 @@ bool BlockGroup::alloc_inode(ext2_inode** inode, uint32_t* index, mode_t mode) {
   if (index != nullptr) *index = ret;
   ret = get_inode(ret, inode);
   memset((void*)(*inode), 0, sizeof(ext2_inode));
+  DEBUG("[BlockGroup] Alloc_inode %u, MODE: %d", ret, mode);
   (*inode)->i_mode = mode;
   return ret;
 }
