@@ -67,7 +67,7 @@ FileSystem::FileSystem()
   if(auth == nullptr) ERR("Auth is nullptr");
 
   // init first block group
-  block_groups_[0] = new BlockGroup(super_block_->get_group_desc(0), 0, global_options.init_flag);
+  block_groups_[0] = new BlockGroup(super_block_->get_group_desc(0), global_options.init_flag);
 
   // init root inode
   if (!block_groups_[0]->get_inode(ROOT_INODE, &root_inode_)) {
@@ -599,7 +599,7 @@ bool FileSystem::get_inode(uint32_t index, ext2_inode** inode) {
     iter = block_groups_
                .insert({block_group_index,
                         new BlockGroup(
-                            super_block_->get_group_desc(block_group_index), block_group_index)})
+                            super_block_->get_group_desc(block_group_index))})
                .first;
   }
   uint32_t inner_index = index % super_block_->inodes_per_group();
@@ -634,7 +634,7 @@ bool FileSystem::get_block(uint32_t index, Block** block, bool dirty,
         iter = block_groups_
                    .insert({block_group_index,
                             new BlockGroup(super_block_->get_group_desc(
-                                block_group_index), block_group_index)})
+                                block_group_index))})
                    .first;
       }
       uint32_t inner_index = index % super_block_->blocks_per_group();
@@ -904,7 +904,7 @@ bool FileSystem::alloc_block_group(uint32_t* index) {
   desc->bg_free_inodes_count = INODES_PER_GROUP;
   desc->bg_used_dirs_count = 0;
   super_block_->put_group_desc(desc);
-  block_groups_[*index] = new BlockGroup(desc, *index, true);
+  block_groups_[*index] = new BlockGroup(desc, true);
   DEBUG("Allocate new block group: %u", *index);
   return true;
 }
@@ -917,7 +917,7 @@ bool FileSystem::free_inode(uint32_t index) {
     iter = block_groups_
                .insert({block_group_index,
                         new BlockGroup(
-                            super_block_->get_group_desc(block_group_index), block_group_index)})
+                            super_block_->get_group_desc(block_group_index))})
                .first;
   }
   if (!iter->second->free_inode(inner_index)) {
@@ -938,7 +938,7 @@ bool FileSystem::free_block(uint32_t index) {
     iter = block_groups_
                .insert({block_group_index,
                         new BlockGroup(
-                            super_block_->get_group_desc(block_group_index), block_group_index)})
+                            super_block_->get_group_desc(block_group_index))})
                .first;
   }
   if (!iter->second->free_block(inner_index)) {

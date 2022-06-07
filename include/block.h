@@ -240,7 +240,7 @@ class DentryBlock {
 
 class BlockGroup {
  public:
-  BlockGroup(ext2_group_desc* desc, uint32_t group_idx, bool alloc = false);
+  BlockGroup(ext2_group_desc* desc, bool alloc = false);
 
   ~BlockGroup();
 
@@ -261,7 +261,6 @@ class BlockGroup {
   bool free_block(uint32_t index);
 
  private:
-  uint32_t group_idx_;
   ext2_group_desc* desc_;
   BitmapBlock* block_bitmap_;
   BitmapBlock* inode_bitmap_;
