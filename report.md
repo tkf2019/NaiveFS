@@ -183,7 +183,7 @@ class FileSystem {
 - `root_inode_`：在创建文件系统时会检查`SuperBlock`状态，如果未被初始化，就创建`root_inode_`作为根目录，该节点不可删除
 - `inode_lookup`：根据提供的路径向下查找，首先检查`DentryCache`，若命中则继续向下查找直到找到路径的最后一项，若缺失则查询`DentryBlock`，并将查询结果插入`DentryCache`
 - `inode_create`:主要分为以下步骤：
-  - 查询父目录并获取父目录的inode
+  - ，
   - 遍历父目录内并判断是否存在和待创建名称重复项，遍历的同时获取父目录inode的最后一个`DentryBlock`
   - 若`DentryBlock`已满，则为父目录inode分配新的`DentryBlock`
   - 分配新inode
