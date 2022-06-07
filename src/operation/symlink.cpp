@@ -20,7 +20,7 @@ int fuse_symlink(const char *src, const char *dst) {
   INFO("MODE: %d, %d", inode->i_mode, inode_id);
   if (ret) return Code2Errno(ret);
 
-  if (src_len <= sizeof(ext2_inode::i_block)) {
+  if (src_len <= sizeof(ext2_inode::i_block), 0) {
     memcpy(inode->i_block, src, src_len);
   } else {
     Block *block;

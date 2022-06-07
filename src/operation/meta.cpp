@@ -71,6 +71,8 @@ int fuse_open(const char* path, struct fuse_file_info* fi) {
   inode->i_atime = nw_time;
   inode->i_ctime = nw_time;
   if ((fi->flags & O_ACCMODE) != O_RDONLY) inode->i_mtime = nw_time;
+  if ((fi->flags & O_TRUNC)) inode->i_size = 0, inode->i_blocks = 0;
+  ic->commit();
   ic->unlock();
 
   fi->fh = reinterpret_cast<decltype(fi->fh)>(fd);
